@@ -1,45 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, Plus, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { teamService } from '@/services/team.service';
-import type { AddPlayerRequest, PlayerRole, BattingStyle, BowlingStyle } from '@/types/team.types';
-
-const roleOptions: { value: PlayerRole; label: string }[] = [
-  { value: 'Batsman', label: 'Batsman' },
-  { value: 'Bowler', label: 'Bowler' },
-  { value: 'AllRounder', label: 'All-Rounder' },
-  { value: 'WicketKeeper', label: 'Wicket-Keeper' },
-];
-
-const battingStyleOptions: { value: BattingStyle; label: string }[] = [
-  { value: 'RightHanded', label: 'Right Handed' },
-  { value: 'LeftHanded', label: 'Left Handed' },
-];
-
-const bowlingStyleOptions: { value: BowlingStyle; label: string }[] = [
-  { value: 'None', label: 'None / Does not bowl' },
-  { value: 'RightArmFast', label: 'Right Arm Fast' },
-  { value: 'RightArmMediumFast', label: 'Right Arm Medium Fast' },
-  { value: 'RightArmMedium', label: 'Right Arm Medium' },
-  { value: 'RightArmOffSpin', label: 'Right Arm Off Spin' },
-  { value: 'RightArmLegSpin', label: 'Right Arm Leg Spin' },
-  { value: 'LeftArmFast', label: 'Left Arm Fast' },
-  { value: 'LeftArmMediumFast', label: 'Left Arm Medium Fast' },
-  { value: 'LeftArmMedium', label: 'Left Arm Medium' },
-  { value: 'LeftArmOrthodox', label: 'Left Arm Orthodox' },
-  { value: 'LeftArmUnorthodox', label: 'Left Arm Unorthodox' },
-];
+import { playerService } from '@/services/player.service';
+import type { Player, PlayerRole } from '@/types/team.types';
 
 const roleBadgeVariant: Record<PlayerRole, 'blue' | 'green' | 'orange' | 'yellow'> = {
   Batsman: 'blue', Bowler: 'green', AllRounder: 'orange', WicketKeeper: 'yellow',
@@ -49,55 +23,96 @@ const roleLabel: Record<PlayerRole, string> = {
   Batsman: 'Batsman', Bowler: 'Bowler', AllRounder: 'All-Rounder', WicketKeeper: 'Keeper',
 };
 
-const emptyForm: AddPlayerRequest = {
-  name: '',
-  dateOfBirth: '',
-  nationality: '',
-  battingStyle: 'RightHanded',
-  bowlingStyle: 'None',
-  role: 'Batsman',
-  isCaptain: false,
-  isWicketKeeper: false,
-  jerseyNumber: undefined,
-};
-
 export default function TeamDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
+
+  // Modal open state
   const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState<AddPlayerRequest>(emptyForm);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Player[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+
+  // Team-specific options
+  const [isCaptain, setIsCaptain] = useState(false);
+  const [isWicketKeeper, setIsWicketKeeper] = useState(false);
+  const [jerseyNumber, setJerseyNumber] = useState<number | undefined>();
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { data: team, isLoading } = useQuery({
     queryKey: ['team', id],
     queryFn: () => teamService.getTeam(id),
   });
 
+  // Debounced search
+  useEffect(() => {
+    if (selectedPlayer || searchQuery.length < 3) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await playerService.searchPlayers(searchQuery);
+        setSearchResults(results);
+        setShowDropdown(true);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedPlayer]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const addMutation = useMutation({
-    mutationFn: (data: AddPlayerRequest) => teamService.addPlayer(id, data),
+    mutationFn: () => teamService.addExistingPlayer(id, {
+      playerId: selectedPlayer!.id,
+      isCaptain,
+      isWicketKeeper,
+      jerseyNumber,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['team', id] });
-      toast.success('Player added');
-      setShowAdd(false);
-      setForm(emptyForm);
+      toast.success('Player added to team');
+      handleClose();
     },
     onError: () => toast.error('Failed to add player'),
   });
 
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = 'Player name is required';
-    if (!form.dateOfBirth) e.dateOfBirth = 'Date of birth is required';
-    if (!form.nationality.trim()) e.nationality = 'Nationality is required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const handleClose = () => {
+    setShowAdd(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedPlayer(null);
+    setShowDropdown(false);
+    setIsCaptain(false);
+    setIsWicketKeeper(false);
+    setJerseyNumber(undefined);
   };
 
-  const handleAdd = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-    addMutation.mutate(form);
+  const selectPlayer = (player: Player) => {
+    setSelectedPlayer(player);
+    setSearchQuery(player.name);
+    setShowDropdown(false);
   };
 
   if (isLoading) return <PageSpinner />;
@@ -218,97 +233,172 @@ export default function TeamDetailPage() {
         </div>
       </div>
 
-      <Modal open={showAdd} onClose={() => { setShowAdd(false); setForm(emptyForm); }} title="Add player" size="lg">
-        <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input
-              label="Full name"
-              placeholder="Sachin Tendulkar"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              error={errors.name}
-            />
-            <Input
-              label="Date of birth"
-              type="date"
-              value={form.dateOfBirth}
-              onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
-              error={errors.dateOfBirth}
-            />
-          </div>
+      {/* Add Player Modal */}
+      <Modal open={showAdd} onClose={handleClose} title="Add player to team" size="md">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input
-              label="Nationality"
-              placeholder="Indian"
-              value={form.nationality}
-              onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))}
-              error={errors.nationality}
-            />
-            <Input
-              label="Jersey number (optional)"
-              type="number"
-              placeholder="10"
-              value={form.jerseyNumber ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, jerseyNumber: e.target.value ? Number(e.target.value) : undefined }))}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Select
-              label="Player role"
-              options={roleOptions}
-              value={form.role}
-              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as PlayerRole }))}
-            />
-            <Select
-              label="Batting style"
-              options={battingStyleOptions}
-              value={form.battingStyle}
-              onChange={(e) => setForm((f) => ({ ...f, battingStyle: e.target.value as BattingStyle }))}
-            />
-          </div>
-
-          <Select
-            label="Bowling style"
-            options={bowlingStyleOptions}
-            value={form.bowlingStyle}
-            onChange={(e) => setForm((f) => ({ ...f, bowlingStyle: e.target.value as BowlingStyle }))}
-          />
-
-          <div style={{ display: 'flex', gap: 16 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={form.isCaptain}
-                onChange={(e) => setForm((f) => ({ ...f, isCaptain: e.target.checked }))}
-              />
-              Captain
+          {/* Autocomplete search */}
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)', display: 'block', marginBottom: 6 }}>
+              Search player
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={form.isWicketKeeper}
-                onChange={(e) => setForm((f) => ({ ...f, isWicketKeeper: e.target.checked }))}
-              />
-              Wicket-Keeper
-            </label>
+            <div ref={dropdownRef} style={{ position: 'relative' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                border: `1px solid ${selectedPlayer ? 'var(--accent)' : 'var(--border)'}`,
+                borderRadius: 'var(--radius-sm)', background: 'var(--bg-elevated)',
+                padding: '0 10px', height: 38,
+              }}>
+                <Search size={13} style={{ color: 'var(--ink-4)', flexShrink: 0 }} />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (selectedPlayer) setSelectedPlayer(null);
+                  }}
+                  placeholder="Type at least 3 characters…"
+                  style={{ flex: 1, border: 0, outline: 0, background: 'transparent', fontSize: 13, color: 'var(--ink)' }}
+                />
+                {isSearching && (
+                  <span style={{ fontSize: 11, color: 'var(--ink-4)', flexShrink: 0 }}>Searching…</span>
+                )}
+                {selectedPlayer && (
+                  <button
+                    onClick={() => { setSelectedPlayer(null); setSearchQuery(''); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-4)', display: 'flex', padding: 2 }}
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown results */}
+              {showDropdown && !selectedPlayer && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50,
+                  background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow)',
+                  maxHeight: 220, overflowY: 'auto',
+                }}>
+                  {searchResults.length === 0 ? (
+                    <div style={{ padding: '12px 14px', fontSize: 13, color: 'var(--ink-3)' }}>
+                      No players found for &ldquo;{searchQuery}&rdquo;
+                    </div>
+                  ) : (
+                    searchResults.map((player, i) => (
+                      <button
+                        key={player.id}
+                        onMouseDown={() => selectPlayer(player)}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '10px 14px', background: 'none', border: 'none',
+                          cursor: 'pointer', textAlign: 'left',
+                          borderBottom: i < searchResults.length - 1 ? '1px solid var(--border)' : 'none',
+                        }}
+                        className="hover:bg-[var(--bg-hover)]"
+                      >
+                        <div style={{
+                          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                          background: 'var(--accent-soft)', border: '1.5px solid var(--accent)',
+                          display: 'grid', placeItems: 'center',
+                          fontSize: 10, fontWeight: 700, color: 'oklch(35% 0.13 150)',
+                        }}>
+                          {player.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)' }}>{player.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 1 }}>
+                            {roleLabel[player.playerRole] ?? player.playerRole} · {player.nationality}
+                          </div>
+                        </div>
+                        {player.jerseyNumber != null && (
+                          <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>#{player.jerseyNumber}</span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            {!selectedPlayer && searchQuery.length > 0 && searchQuery.length < 3 && (
+              <p style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 5 }}>
+                Type {3 - searchQuery.length} more character{3 - searchQuery.length !== 1 ? 's' : ''} to search…
+              </p>
+            )}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-            <Button type="button" variant="secondary" onClick={() => { setShowAdd(false); setForm(emptyForm); }}>
-              Cancel
+          {/* Selected player card */}
+          {selectedPlayer && (
+            <div style={{
+              padding: '12px 14px', borderRadius: 'var(--radius-sm)',
+              background: 'var(--accent-soft)', border: '1px solid var(--accent)',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                background: 'white', border: '2px solid var(--accent)',
+                display: 'grid', placeItems: 'center',
+                fontSize: 12, fontWeight: 700, color: 'oklch(35% 0.13 150)',
+              }}>
+                {selectedPlayer.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>{selectedPlayer.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 1 }}>
+                  {roleLabel[selectedPlayer.playerRole] ?? selectedPlayer.playerRole}
+                  {' · '}
+                  {selectedPlayer.battingStyle === 'RightHanded' ? 'Right Handed' : 'Left Handed'}
+                  {' · '}
+                  {selectedPlayer.nationality}
+                </div>
+              </div>
+              <Badge variant={roleBadgeVariant[selectedPlayer.playerRole]}>
+                {roleLabel[selectedPlayer.playerRole]}
+              </Badge>
+            </div>
+          )}
+
+          {/* Team-specific options — only shown after a player is selected */}
+          {selectedPlayer && (
+            <>
+              <Input
+                label="Jersey number (optional)"
+                type="number"
+                placeholder="10"
+                value={jerseyNumber ?? ''}
+                onChange={(e) => setJerseyNumber(e.target.value ? Number(e.target.value) : undefined)}
+              />
+              <div style={{ display: 'flex', gap: 20 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={isCaptain} onChange={(e) => setIsCaptain(e.target.checked)} />
+                  Captain
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={isWicketKeeper} onChange={(e) => setIsWicketKeeper(e.target.checked)} />
+                  Wicket-Keeper
+                </label>
+              </div>
+            </>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+            <Button type="button" variant="secondary" onClick={handleClose}>Cancel</Button>
+            <Button
+              onClick={() => addMutation.mutate()}
+              loading={addMutation.isPending}
+              disabled={!selectedPlayer}
+            >
+              Add to team
             </Button>
-            <Button type="submit" loading={addMutation.isPending}>Add player</Button>
           </div>
-        </form>
+        </div>
       </Modal>
     </>
   );
 }
 
-function formatBowlingStyle(style: BowlingStyle): string {
-  const map: Record<BowlingStyle, string> = {
+function formatBowlingStyle(style: string): string {
+  const map: Record<string, string> = {
     None: '—', RightArmFast: 'RAF', RightArmMediumFast: 'RAMF', RightArmMedium: 'RAM',
     RightArmOffSpin: 'Off Spin', RightArmLegSpin: 'Leg Spin', LeftArmFast: 'LAF',
     LeftArmMediumFast: 'LAMF', LeftArmMedium: 'LAM', LeftArmOrthodox: 'Orthodox',

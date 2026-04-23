@@ -4,7 +4,7 @@ import {
   BowlingStyleToInt, BowlingStyleFromInt,
   PlayerRoleToInt, PlayerRoleFromInt,
 } from '@/utils/api-enums';
-import type { Team, CreateTeamRequest, AddPlayerRequest, TeamPlayer } from '@/types/team.types';
+import type { Team, CreateTeamRequest, AddPlayerRequest, AddExistingPlayerRequest, TeamPlayer } from '@/types/team.types';
 
 function mapPlayer(raw: Record<string, unknown>) {
   const roleRaw = raw.playerRole ?? raw.role;
@@ -48,6 +48,12 @@ export const teamService = {
       bowlingStyle: BowlingStyleToInt[data.bowlingStyle],
     };
     const response = await api.post<Record<string, unknown>>(`/teams/${teamId}/players`, payload);
+    const tp = response.data as Record<string, unknown>;
+    return { ...tp, player: mapPlayer(tp.player as Record<string, unknown>) } as TeamPlayer;
+  },
+
+  async addExistingPlayer(teamId: string, data: AddExistingPlayerRequest): Promise<TeamPlayer> {
+    const response = await api.post<Record<string, unknown>>(`/teams/${teamId}/players`, data);
     const tp = response.data as Record<string, unknown>;
     return { ...tp, player: mapPlayer(tp.player as Record<string, unknown>) } as TeamPlayer;
   },

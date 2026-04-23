@@ -427,6 +427,27 @@
         }
       }
     },
+    "/api/v1/players/search": {
+      "get": {
+        "tags": [
+          "Players"
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/v1/matches/{matchId}/ball": {
       "post": {
         "tags": [
@@ -602,6 +623,10 @@
       "AddPlayerRequest": {
         "type": "object",
         "properties": {
+          "playerId": {
+            "type": "string",
+            "nullable": true
+          },
           "name": {
             "type": "string",
             "nullable": true
@@ -609,31 +634,11 @@
           "role": {
             "$ref": "#/components/schemas/PlayerRole"
           },
-          "battingStyle": {
-            "$ref": "#/components/schemas/BattingStyle"
-          },
-          "bowlingStyle": {
-            "$ref": "#/components/schemas/BowlingStyle"
-          },
           "isCaptain": {
             "type": "boolean"
           },
           "isWicketKeeper": {
             "type": "boolean"
-          },
-          "dateOfBirth": {
-            "type": "string",
-            "format": "date",
-            "nullable": true
-          },
-          "nationality": {
-            "type": "string",
-            "nullable": true
-          },
-          "jerseyNumber": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
           }
         },
         "additionalProperties": false
@@ -697,28 +702,26 @@
       },
       "BattingStyle": {
         "enum": [
-          0,
-          1
+          "RightHanded",
+          "LeftHanded"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "BowlingStyle": {
         "enum": [
-          0,
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7,
-          8,
-          9,
-          10
+          "None",
+          "RightArmFast",
+          "RightArmMediumFast",
+          "RightArmMedium",
+          "RightArmOffSpin",
+          "RightArmLegSpin",
+          "LeftArmFast",
+          "LeftArmMediumFast",
+          "LeftArmMedium",
+          "LeftArmOrthodox",
+          "LeftArmUnorthodox"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "CreateMatchRequest": {
         "type": "object",
@@ -805,14 +808,13 @@
       },
       "ExtraType": {
         "enum": [
-          0,
-          1,
-          2,
-          3,
-          4
+          "None",
+          "Wide",
+          "NoBall",
+          "Bye",
+          "LegBye"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "LoginRequest": {
         "type": "object",
@@ -830,23 +832,21 @@
       },
       "MatchFormat": {
         "enum": [
-          0,
-          1,
-          2,
-          3
+          "T20",
+          "ODI",
+          "Test",
+          "Custom"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "PlayerRole": {
         "enum": [
-          0,
-          1,
-          2,
-          3
+          "Batsman",
+          "Bowler",
+          "AllRounder",
+          "WicketKeeper"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "PlayingXIDto": {
         "type": "object",
@@ -902,11 +902,10 @@
       },
       "TossDecision": {
         "enum": [
-          0,
-          1
+          "Bat",
+          "Bowl"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       },
       "UpdatePlayerRequest": {
         "type": "object",
@@ -943,18 +942,17 @@
       },
       "WicketType": {
         "enum": [
-          0,
-          1,
-          2,
-          3,
-          4,
-          5,
-          6,
-          7,
-          8
+          "None",
+          "Bowled",
+          "Caught",
+          "RunOut",
+          "LBW",
+          "Stumped",
+          "HitWicket",
+          "RetiredHurt",
+          "ObstructingField"
         ],
-        "type": "integer",
-        "format": "int32"
+        "type": "string"
       }
     },
     "securitySchemes": {

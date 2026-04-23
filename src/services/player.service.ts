@@ -39,6 +39,11 @@ export const playerService = {
     return mapPlayer(response.data);
   },
 
+  async searchPlayers(name: string): Promise<Player[]> {
+    const response = await api.get<Record<string, unknown>[]>('/players/search', { params: { name } });
+    return response.data.map(mapPlayer);
+  },
+
   async updatePlayer(id: string, data: UpdatePlayerRequest): Promise<Player> {
     const payload = {
       ...data,

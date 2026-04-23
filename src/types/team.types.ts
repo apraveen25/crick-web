@@ -83,3 +83,11 @@ export interface AddPlayerRequest {
   isWicketKeeper: boolean;
   jerseyNumber?: number;
 }
+
+// POST /teams/{id}/players — add existing player by ID
+export interface AddExistingPlayerRequest {
+  playerId: string;
+  isCaptain?: boolean;
+  isWicketKeeper?: boolean;
+  jerseyNumber?: number;
+}
