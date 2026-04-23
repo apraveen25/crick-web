@@ -1,6 +1,29 @@
 export type MatchFormat = 'T20' | 'ODI' | 'Test' | 'Custom';
 export type MatchStatus = 'upcoming' | 'live' | 'completed' | 'abandoned';
 export type InningStatus = 'not_started' | 'in_progress' | 'completed';
+export type TossDecision = 'Bat' | 'Bowl';
+
+export interface PlayingXIDto {
+  teamId: string;
+  playerIds: string[];
+}
+
+// POST /matches
+export interface CreateMatchRequest {
+  team1Id: string;
+  team2Id: string;
+  format: MatchFormat;
+  oversPerInnings: number;
+  scheduledAt: string;
+  venue: string;
+  playingXIs?: PlayingXIDto[];
+}
+
+// POST /matches/{id}/start
+export interface StartMatchRequest {
+  tossWinnerTeamId: string;
+  tossDecision: TossDecision;
+}
 
 export interface Match {
   id: string;
@@ -16,7 +39,7 @@ export interface Match {
   team1ShortName: string;
   team2ShortName: string;
   tossWinnerId?: string;
-  tossDecision?: 'bat' | 'bowl';
+  tossDecision?: TossDecision;
   currentInning?: number;
   totalOvers: number;
   innings: Inning[];
@@ -75,25 +98,4 @@ export interface BowlingFigure {
   wickets: number;
   economy: number;
   isCurrentBowler?: boolean;
-}
-
-export interface CreateMatchRequest {
-  name: string;
-  format: MatchFormat;
-  venue: string;
-  date: string;
-  team1Id: string;
-  team2Id: string;
-  totalOvers: number;
-}
-
-export interface TossRequest {
-  tossWinnerId: string;
-  tossDecision: 'bat' | 'bowl';
-}
-
-export interface StartInningRequest {
-  openingBatsman1Id: string;
-  openingBatsman2Id: string;
-  openingBowlerId: string;
 }

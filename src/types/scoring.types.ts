@@ -1,18 +1,36 @@
-export type BallType = 'normal' | 'wide' | 'no_ball' | 'bye' | 'leg_bye';
-export type WicketType =
-  | 'bowled'
-  | 'caught'
-  | 'lbw'
-  | 'run_out'
-  | 'stumped'
-  | 'hit_wicket'
-  | 'obstructing_field'
-  | 'handled_ball'
-  | 'timed_out';
+// Extra type — None means a normal delivery
+export type ExtraType = 'None' | 'Wide' | 'NoBall' | 'Bye' | 'LegBye';
 
+// Mode of dismissal
+export type WicketType =
+  | 'Bowled'
+  | 'Caught'
+  | 'RunOut'
+  | 'Stumped'
+  | 'LBW'
+  | 'HitWicket'
+  | 'ObstructingField'
+  | 'TimedOut'
+  | 'DoubleHit';
+
+// POST /live/{matchId}/ball
+export interface DeliverBallRequest {
+  batsmanId: string;
+  bowlerId: string;
+  runsScored: number;
+  extraType: ExtraType;
+  extraRuns: number;
+  isWicket: boolean;
+  wicketType?: WicketType;
+  fielderId?: string;
+  dismissedBatsmanId?: string;
+  nextBatsmanId?: string;
+  nextBowlerId?: string;
+}
+
+// Ball record returned in GET /live/{matchId}/state → lastSixBalls
 export interface BallRecord {
   id: string;
-  inningId: string;
   overNumber: number;
   ballNumber: number;
   batsmanId: string;
@@ -20,55 +38,14 @@ export interface BallRecord {
   bowlerId: string;
   bowlerName: string;
   runs: number;
-  ballType: BallType;
+  ballType: string;
   isWicket: boolean;
-  wicketType?: WicketType;
+  wicketType?: string;
   dismissedPlayerId?: string;
   dismissedPlayerName?: string;
   fielderId?: string;
   fielderName?: string;
   commentary?: string;
-}
-
-export interface DeliverBallRequest {
-  inningId: string;
-  batsmanId: string;
-  bowlerId: string;
-  runs: number;
-  ballType: BallType;
-  isWicket: boolean;
-  wicketType?: WicketType;
-  dismissedPlayerId?: string;
-  fielderId?: string;
-}
-
-export interface ChangeBowlerRequest {
-  bowlerId: string;
-}
-
-export interface SwapBatsmanRequest {
-  newBatsmanId: string;
-}
-
-export interface LiveScore {
-  matchId: string;
-  currentInning: number;
-  battingTeamId: string;
-  battingTeamName: string;
-  bowlingTeamId: string;
-  bowlingTeamName: string;
-  runs: number;
-  wickets: number;
-  overs: number;
-  balls: number;
-  runRate: number;
-  requiredRunRate?: number;
-  target?: number;
-  striker: ActiveBatsman;
-  nonStriker: ActiveBatsman;
-  currentBowler: ActiveBowler;
-  lastSixBalls: BallRecord[];
-  recentOvers: RecentOver[];
 }
 
 export interface ActiveBatsman {
@@ -96,4 +73,26 @@ export interface RecentOver {
   runs: number;
   wickets: number;
   balls: string[];
+}
+
+// GET /live/{matchId}/state
+export interface LiveScore {
+  matchId: string;
+  currentInning: number;
+  battingTeamId: string;
+  battingTeamName: string;
+  bowlingTeamId: string;
+  bowlingTeamName: string;
+  runs: number;
+  wickets: number;
+  overs: number;
+  balls: number;
+  runRate: number;
+  requiredRunRate?: number;
+  target?: number;
+  striker: ActiveBatsman;
+  nonStriker: ActiveBatsman;
+  currentBowler: ActiveBowler;
+  lastSixBalls: BallRecord[];
+  recentOvers: RecentOver[];
 }

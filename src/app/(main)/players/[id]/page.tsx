@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { playerService } from '@/services/player.service';
 import { teamService } from '@/services/team.service';
-import type { AddPlayerRequest, PlayerRole, BattingStyle, BowlingStyle } from '@/types/team.types';
+import type { UpdatePlayerRequest, PlayerRole, BattingStyle, BowlingStyle } from '@/types/team.types';
 
 const roleOptions: { value: PlayerRole; label: string }[] = [
   { value: 'Batsman', label: 'Batsman' },
@@ -42,25 +42,15 @@ const bowlingStyleOptions: { value: BowlingStyle; label: string }[] = [
 ];
 
 const roleBadge: Record<PlayerRole, 'blue' | 'green' | 'orange' | 'yellow'> = {
-  Batsman: 'blue',
-  Bowler: 'green',
-  AllRounder: 'orange',
-  WicketKeeper: 'yellow',
+  Batsman: 'blue', Bowler: 'green', AllRounder: 'orange', WicketKeeper: 'yellow',
 };
 
 function bowlingLabel(style: BowlingStyle): string {
   const map: Record<BowlingStyle, string> = {
-    None: 'Does not bowl',
-    RightArmFast: 'Right Arm Fast',
-    RightArmMediumFast: 'Right Arm Medium Fast',
-    RightArmMedium: 'Right Arm Medium',
-    RightArmOffSpin: 'Right Arm Off Spin',
-    RightArmLegSpin: 'Right Arm Leg Spin',
-    LeftArmFast: 'Left Arm Fast',
-    LeftArmMediumFast: 'Left Arm Medium Fast',
-    LeftArmMedium: 'Left Arm Medium',
-    LeftArmOrthodox: 'Left Arm Orthodox',
-    LeftArmUnorthodox: 'Left Arm Unorthodox',
+    None: 'Does not bowl', RightArmFast: 'Right Arm Fast', RightArmMediumFast: 'Right Arm Medium Fast',
+    RightArmMedium: 'Right Arm Medium', RightArmOffSpin: 'Right Arm Off Spin', RightArmLegSpin: 'Right Arm Leg Spin',
+    LeftArmFast: 'Left Arm Fast', LeftArmMediumFast: 'Left Arm Medium Fast', LeftArmMedium: 'Left Arm Medium',
+    LeftArmOrthodox: 'Left Arm Orthodox', LeftArmUnorthodox: 'Left Arm Unorthodox',
   };
   return map[style] ?? style;
 }
@@ -74,7 +64,7 @@ export default function PlayerDetailPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<AddPlayerRequest | null>(null);
+  const [form, setForm] = useState<UpdatePlayerRequest | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { data: player, isLoading } = useQuery({
@@ -87,12 +77,10 @@ export default function PlayerDetailPage() {
     queryFn: teamService.getTeams,
   });
 
-  const memberTeams = allTeams.filter((t) =>
-    t.players.some((tp) => tp.playerId === id)
-  );
+  const memberTeams = allTeams.filter((t) => t.players.some((tp) => tp.playerId === id));
 
   const updateMutation = useMutation({
-    mutationFn: (data: Partial<AddPlayerRequest>) => playerService.updatePlayer(id, data),
+    mutationFn: (data: UpdatePlayerRequest) => playerService.updatePlayer(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['player', id] });
       toast.success('Player updated');
@@ -109,18 +97,14 @@ export default function PlayerDetailPage() {
       nationality: player.nationality,
       battingStyle: player.battingStyle,
       bowlingStyle: player.bowlingStyle,
-      playerRole: player.playerRole,
+      role: player.playerRole,
       jerseyNumber: player.jerseyNumber,
     });
     setErrors({});
     setEditing(true);
   };
 
-  const cancelEdit = () => {
-    setEditing(false);
-    setForm(null);
-    setErrors({});
-  };
+  const cancelEdit = () => { setEditing(false); setForm(null); setErrors({}); };
 
   const validate = () => {
     if (!form) return false;
@@ -197,7 +181,6 @@ export default function PlayerDetailPage() {
         </div>
 
         {editing && form ? (
-          /* ── Edit form ─────────────────────────────────────────────────── */
           <form onSubmit={handleSave}>
             <div style={{
               background: 'var(--bg-elevated)', border: '1px solid var(--border)',
@@ -205,72 +188,34 @@ export default function PlayerDetailPage() {
               display: 'flex', flexDirection: 'column', gap: 16,
             }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Input
-                  label="Full name"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => f && ({ ...f, name: e.target.value }))}
-                  error={errors.name}
-                />
-                <Input
-                  label="Date of birth"
-                  type="date"
-                  value={form.dateOfBirth}
-                  onChange={(e) => setForm((f) => f && ({ ...f, dateOfBirth: e.target.value }))}
-                  error={errors.dateOfBirth}
-                />
+                <Input label="Full name" value={form.name}
+                  onChange={(e) => setForm((f) => f && ({ ...f, name: e.target.value }))} error={errors.name} />
+                <Input label="Date of birth" type="date" value={form.dateOfBirth}
+                  onChange={(e) => setForm((f) => f && ({ ...f, dateOfBirth: e.target.value }))} error={errors.dateOfBirth} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Input
-                  label="Nationality"
-                  value={form.nationality}
-                  onChange={(e) => setForm((f) => f && ({ ...f, nationality: e.target.value }))}
-                  error={errors.nationality}
-                />
-                <Input
-                  label="Jersey number (optional)"
-                  type="number"
-                  value={form.jerseyNumber ?? ''}
-                  onChange={(e) => setForm((f) => f && ({ ...f, jerseyNumber: e.target.value ? Number(e.target.value) : undefined }))}
-                />
+                <Input label="Nationality" value={form.nationality}
+                  onChange={(e) => setForm((f) => f && ({ ...f, nationality: e.target.value }))} error={errors.nationality} />
+                <Input label="Jersey number (optional)" type="number" value={form.jerseyNumber ?? ''}
+                  onChange={(e) => setForm((f) => f && ({ ...f, jerseyNumber: e.target.value ? Number(e.target.value) : undefined }))} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Select
-                  label="Player role"
-                  options={roleOptions}
-                  value={form.playerRole}
-                  onChange={(e) => setForm((f) => f && ({ ...f, playerRole: e.target.value as PlayerRole }))}
-                />
-                <Select
-                  label="Batting style"
-                  options={battingStyleOptions}
-                  value={form.battingStyle}
-                  onChange={(e) => setForm((f) => f && ({ ...f, battingStyle: e.target.value as BattingStyle }))}
-                />
+                <Select label="Player role" options={roleOptions} value={form.role}
+                  onChange={(e) => setForm((f) => f && ({ ...f, role: e.target.value as PlayerRole }))} />
+                <Select label="Batting style" options={battingStyleOptions} value={form.battingStyle}
+                  onChange={(e) => setForm((f) => f && ({ ...f, battingStyle: e.target.value as BattingStyle }))} />
               </div>
-              <Select
-                label="Bowling style"
-                options={bowlingStyleOptions}
-                value={form.bowlingStyle}
-                onChange={(e) => setForm((f) => f && ({ ...f, bowlingStyle: e.target.value as BowlingStyle }))}
-              />
-
+              <Select label="Bowling style" options={bowlingStyleOptions} value={form.bowlingStyle}
+                onChange={(e) => setForm((f) => f && ({ ...f, bowlingStyle: e.target.value as BowlingStyle }))} />
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
-                <Button type="button" variant="secondary" onClick={cancelEdit}>
-                  <X size={13} /> Cancel
-                </Button>
-                <Button type="submit" loading={updateMutation.isPending}>
-                  <Check size={13} /> Save changes
-                </Button>
+                <Button type="button" variant="secondary" onClick={cancelEdit}><X size={13} /> Cancel</Button>
+                <Button type="submit" loading={updateMutation.isPending}><Check size={13} /> Save changes</Button>
               </div>
             </div>
           </form>
         ) : (
-          /* ── Detail view ───────────────────────────────────────────────── */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{
-              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)',
-            }}>
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
               <SectionTitle>Player details</SectionTitle>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
                 <Field label="Full name" value={player.name} />
@@ -283,16 +228,11 @@ export default function PlayerDetailPage() {
               </div>
             </div>
 
-            {/* Teams section */}
-            <div style={{
-              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)',
-            }}>
+            <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
               <SectionTitle>Teams</SectionTitle>
               {memberTeams.length === 0 ? (
                 <div style={{ padding: '24px 20px', color: 'var(--ink-4)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Users size={14} />
-                  Not a member of any team yet.
+                  <Users size={14} /> Not a member of any team yet.
                 </div>
               ) : (
                 memberTeams.map((team, i) => {
@@ -302,8 +242,8 @@ export default function PlayerDetailPage() {
                       key={team.id}
                       onClick={() => router.push(`/teams/${team.id}`)}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '12px 20px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
+                        cursor: 'pointer',
                         borderBottom: i < memberTeams.length - 1 ? '1px solid var(--border)' : 'none',
                       }}
                       className="hover:bg-[var(--bg-hover)]"
@@ -341,8 +281,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
       padding: '12px 20px', borderBottom: '1px solid var(--border)',
       fontSize: 11.5, fontWeight: 600, color: 'var(--ink-3)',
       textTransform: 'uppercase', letterSpacing: '0.07em',
-      background: 'var(--bg-sunken)',
-      borderRadius: 'var(--radius) var(--radius) 0 0',
+      background: 'var(--bg-sunken)', borderRadius: 'var(--radius) var(--radius) 0 0',
     }}>
       {children}
     </div>
@@ -351,11 +290,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function Field({ label, value, last }: { label: string; value: string; last?: boolean }) {
   return (
-    <div style={{
-      padding: '14px 20px',
-      borderBottom: last ? 'none' : '1px solid var(--border)',
-      borderRight: '1px solid var(--border)',
-    }}>
+    <div style={{ padding: '14px 20px', borderBottom: last ? 'none' : '1px solid var(--border)', borderRight: '1px solid var(--border)' }}>
       <div style={{ fontSize: 11, color: 'var(--ink-4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
         {label}
       </div>

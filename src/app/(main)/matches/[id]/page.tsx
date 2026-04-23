@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Activity, Users } from 'lucide-react';
+import { ArrowLeft, Activity } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +14,7 @@ import { PageSpinner } from '@/components/ui/Spinner';
 import { matchService } from '@/services/match.service';
 import { teamService } from '@/services/team.service';
 import { formatDate } from '@/utils/format';
-import type { MatchStatus } from '@/types/match.types';
+import type { MatchStatus, TossDecision } from '@/types/match.types';
 
 const statusBadge: Record<MatchStatus, 'green' | 'red' | 'gray' | 'yellow'> = {
   live: 'red',
@@ -29,7 +29,7 @@ export default function MatchDetailPage() {
   const qc = useQueryClient();
   const [showToss, setShowToss] = useState(false);
   const [tossWinner, setTossWinner] = useState('');
-  const [tossDecision, setTossDecision] = useState<'bat' | 'bowl'>('bat');
+  const [tossDecision, setTossDecision] = useState<TossDecision>('Bat');
 
   const { data: match, isLoading } = useQuery({
     queryKey: ['match', id],
@@ -49,14 +49,15 @@ export default function MatchDetailPage() {
     enabled: !!match?.team2Id,
   });
 
-  const tossMutation = useMutation({
-    mutationFn: () => matchService.setToss(id, { tossWinnerId: tossWinner, tossDecision }),
+  const startMutation = useMutation({
+    mutationFn: () => matchService.startMatch(id, { tossWinnerTeamId: tossWinner, tossDecision }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['match', id] });
-      toast.success('Toss recorded');
+      toast.success('Match started!');
       setShowToss(false);
+      router.push(`/scoring/${id}`);
     },
-    onError: () => toast.error('Failed to set toss'),
+    onError: () => toast.error('Failed to start match'),
   });
 
   if (isLoading) return <PageSpinner />;
@@ -77,16 +78,9 @@ export default function MatchDetailPage() {
               <Activity size={14} /> Open scorer
             </Button>
           ) : match.status === 'upcoming' ? (
-            <div style={{ display: 'flex', gap: 8 }}>
-              {!match.tossWinnerId && (
-                <Button variant="secondary" onClick={() => setShowToss(true)}>
-                  <Users size={14} /> Set toss
-                </Button>
-              )}
-              <Button onClick={() => router.push(`/scoring/${id}`)}>
-                <Activity size={14} /> Start match
-              </Button>
-            </div>
+            <Button onClick={() => setShowToss(true)}>
+              <Activity size={14} /> Start match
+            </Button>
           ) : null
         }
       />
@@ -200,7 +194,7 @@ export default function MatchDetailPage() {
       </div>
 
       {/* Toss Modal */}
-      <Modal open={showToss} onClose={() => setShowToss(false)} title="Record toss">
+      <Modal open={showToss} onClose={() => setShowToss(false)} title="Start match — toss">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Select
             label="Toss winner"
@@ -214,7 +208,7 @@ export default function MatchDetailPage() {
               Elected to
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
-              {(['bat', 'bowl'] as const).map((d) => (
+              {(['Bat', 'Bowl'] as TossDecision[]).map((d) => (
                 <button
                   key={d}
                   type="button"
@@ -227,14 +221,14 @@ export default function MatchDetailPage() {
                     color: tossDecision === d ? 'oklch(35% 0.13 150)' : 'var(--ink-2)',
                   }}
                 >
-                  {d.charAt(0).toUpperCase() + d.slice(1)} first
+                  {d} first
                 </button>
               ))}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <Button variant="secondary" onClick={() => setShowToss(false)}>Cancel</Button>
-            <Button onClick={() => tossMutation.mutate()} loading={tossMutation.isPending} disabled={!tossWinner}>
+            <Button onClick={() => startMutation.mutate()} loading={startMutation.isPending} disabled={!tossWinner}>
               Confirm
             </Button>
           </div>

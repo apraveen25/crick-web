@@ -31,6 +31,8 @@ export interface TeamPlayer {
   playerId: string;
   player: Player;
   jerseyNumber?: number;
+  isCaptain?: boolean;
+  isWicketKeeper?: boolean;
 }
 
 export interface Team {
@@ -45,15 +47,39 @@ export interface Team {
 export interface CreateTeamRequest {
   name: string;
   shortName: string;
-  logoUrl?: string;
 }
 
-export interface AddPlayerRequest {
+// POST /players — create a standalone global player (API field: playerRole)
+export interface CreatePlayerRequest {
   name: string;
   dateOfBirth: string;
   nationality: string;
   battingStyle: BattingStyle;
   bowlingStyle: BowlingStyle;
   playerRole: PlayerRole;
+  jerseyNumber?: number;
+}
+
+// PUT /players/{id} — update player (API field: role, not playerRole)
+export interface UpdatePlayerRequest {
+  name: string;
+  dateOfBirth: string;
+  nationality: string;
+  battingStyle: BattingStyle;
+  bowlingStyle: BowlingStyle;
+  role: PlayerRole;
+  jerseyNumber?: number;
+}
+
+// POST /teams/{id}/players — add player to team (API field: role + captain/keeper flags)
+export interface AddPlayerRequest {
+  name: string;
+  dateOfBirth: string;
+  nationality: string;
+  battingStyle: BattingStyle;
+  bowlingStyle: BowlingStyle;
+  role: PlayerRole;
+  isCaptain: boolean;
+  isWicketKeeper: boolean;
   jerseyNumber?: number;
 }

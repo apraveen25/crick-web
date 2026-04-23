@@ -8,26 +8,22 @@ import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Select } from '@/components/ui/Select';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { scoringService } from '@/services/scoring.service';
 import { matchService } from '@/services/match.service';
 import { teamService } from '@/services/team.service';
 import { formatOvers, getBallDisplay, getBallColor } from '@/utils/format';
-import type { BallType, WicketType, DeliverBallRequest } from '@/types/scoring.types';
-
-type BallEvent =
-  | { type: 'run'; runs: number }
-  | { type: 'extra'; kind: BallType; runs: number }
-  | { type: 'wicket'; how: string; runs?: number };
+import type { ExtraType, WicketType, DeliverBallRequest } from '@/types/scoring.types';
 
 export default function ScoringPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
 
-  const [modal, setModal] = useState<'wicket' | 'extras' | 'bowler' | 'batsman' | null>(null);
-  const [extraKind, setExtraKind] = useState<BallType | null>(null);
+  const [modal, setModal] = useState<'wicket' | 'wicket-batsman' | 'extras' | 'bowler' | null>(null);
+  const [extraKind, setExtraKind] = useState<ExtraType | null>(null);
+  const [pendingWicketType, setPendingWicketType] = useState<WicketType | null>(null);
+  const [pendingNextBowlerId, setPendingNextBowlerId] = useState<string | null>(null);
   const [history, setHistory] = useState<unknown[]>([]);
   const [freeHit, setFreeHit] = useState(false);
 
@@ -55,8 +51,9 @@ export default function ScoringPage() {
   });
 
   const ballMutation = useMutation({
-    mutationFn: scoringService.deliverBall,
+    mutationFn: (req: DeliverBallRequest) => scoringService.deliverBall(id, req),
     onSuccess: (ball) => {
+      setPendingNextBowlerId(null);
       setHistory((h) => [...h, ball]);
       qc.invalidateQueries({ queryKey: ['live', id] });
       const isNoBall = ball.ballType === 'no_ball';
@@ -69,7 +66,7 @@ export default function ScoringPage() {
   });
 
   const undoMutation = useMutation({
-    mutationFn: () => scoringService.undoLastBall(liveScore!.striker.playerId),
+    mutationFn: () => scoringService.undoLastBall(id),
     onSuccess: () => {
       setHistory((h) => h.slice(0, -1));
       qc.invalidateQueries({ queryKey: ['live', id] });
@@ -80,20 +77,30 @@ export default function ScoringPage() {
   });
 
   const deliverBall = useCallback(
-    (runs: number, ballType: BallType = 'normal', isWicket = false, wicketType?: WicketType) => {
+    (
+      runsScored: number,
+      extraType: ExtraType = 'None',
+      extraRuns = 0,
+      isWicket = false,
+      wicketType?: WicketType,
+      nextBatsmanId?: string,
+    ) => {
       if (!liveScore) return;
       const req: DeliverBallRequest = {
-        inningId: match?.innings.find((i) => i.inningNumber === liveScore.currentInning)?.id ?? '',
         batsmanId: liveScore.striker.playerId,
         bowlerId: liveScore.currentBowler.playerId,
-        runs,
-        ballType,
+        runsScored,
+        extraType,
+        extraRuns,
         isWicket,
         wicketType,
+        dismissedBatsmanId: isWicket ? liveScore.striker.playerId : undefined,
+        nextBatsmanId,
+        nextBowlerId: pendingNextBowlerId ?? undefined,
       };
       ballMutation.mutate(req);
     },
-    [liveScore, match, ballMutation]
+    [liveScore, ballMutation, pendingNextBowlerId]
   );
 
   // Keyboard shortcuts
@@ -102,10 +109,10 @@ export default function ScoringPage() {
       if (modal || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
       const k = e.key;
       if (k >= '0' && k <= '6') { deliverBall(Number(k)); e.preventDefault(); }
-      else if (k === 'w' || k === 'W') { e.preventDefault(); setExtraKind('wide'); setModal('extras'); }
-      else if (k === 'n' || k === 'N') { e.preventDefault(); setExtraKind('no_ball'); setModal('extras'); }
-      else if (k === 'b' || k === 'B') { e.preventDefault(); deliverBall(1, 'bye'); }
-      else if (k === 'l' || k === 'L') { e.preventDefault(); deliverBall(1, 'leg_bye'); }
+      else if (k === 'w' || k === 'W') { e.preventDefault(); setExtraKind('Wide'); setModal('extras'); }
+      else if (k === 'n' || k === 'N') { e.preventDefault(); setExtraKind('NoBall'); setModal('extras'); }
+      else if (k === 'b' || k === 'B') { e.preventDefault(); deliverBall(0, 'Bye', 1); }
+      else if (k === 'l' || k === 'L') { e.preventDefault(); deliverBall(0, 'LegBye', 1); }
       else if (k === 'x' || k === 'X') { e.preventDefault(); setModal('wicket'); }
       else if (k === 'u' || k === 'U' || (k === 'z' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); undoMutation.mutate(); }
     };
@@ -149,11 +156,13 @@ export default function ScoringPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <LiveChip />
             {freeHit && <FreeHitChip />}
+            {pendingNextBowlerId && (
+              <span style={{ fontSize: 11, color: 'var(--ink-3)', padding: '3px 8px', background: 'var(--bg-sunken)', border: '1px solid var(--border)', borderRadius: 999 }}>
+                Bowler set for next over
+              </span>
+            )}
             <Button variant="outline" size="sm" onClick={() => {}}>
               <Share2 size={13} /> Share
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setModal('wicket')}>
-              <Keyboard size={13} /> Shortcuts
             </Button>
           </div>
         }
@@ -193,19 +202,11 @@ export default function ScoringPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 500 }}>INN {liveScore.currentInning}</span>
-                <span style={{
-                  display: 'inline-flex', padding: '3px 10px', borderRadius: 999,
-                  fontSize: 11.5, fontWeight: 600,
-                  background: 'var(--accent-soft)', color: 'oklch(35% 0.13 150)',
-                }}>
+                <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, background: 'var(--accent-soft)', color: 'oklch(35% 0.13 150)' }}>
                   CRR {runRate.toFixed(2)}
                 </span>
                 {requiredRunRate && (
-                  <span style={{
-                    display: 'inline-flex', padding: '3px 10px', borderRadius: 999,
-                    fontSize: 11, fontWeight: 500,
-                    background: 'var(--warn-soft)', color: 'oklch(38% 0.14 75)',
-                  }}>
+                  <span style={{ display: 'inline-flex', padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 500, background: 'var(--warn-soft)', color: 'oklch(38% 0.14 75)' }}>
                     RRR {requiredRunRate.toFixed(2)}
                   </span>
                 )}
@@ -225,16 +226,11 @@ export default function ScoringPage() {
             </div>
 
             {/* Free Hit banner */}
-            {freeHit && (
-              <div className="freehit-banner">FREE HIT active — only run-out counts as a wicket</div>
-            )}
+            {freeHit && <div className="freehit-banner">FREE HIT active — only run-out counts as a wicket</div>}
 
             {/* Batters */}
             <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
-              {[
-                { player: striker, isStrike: true },
-                { player: nonStriker, isStrike: false },
-              ].map(({ player, isStrike }) => (
+              {[{ player: striker, isStrike: true }, { player: nonStriker, isStrike: false }].map(({ player, isStrike }) => (
                 <div
                   key={player.playerId}
                   style={{
@@ -247,9 +243,7 @@ export default function ScoringPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
                       <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>{player.playerName}</span>
                       {isStrike && (
-                        <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--accent)', color: 'white', padding: '1px 5px', borderRadius: 4 }}>
-                          on strike
-                        </span>
+                        <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--accent)', color: 'white', padding: '1px 5px', borderRadius: 4 }}>on strike</span>
                       )}
                     </div>
                   </div>
@@ -265,10 +259,7 @@ export default function ScoringPage() {
               ))}
 
               {/* Current bowler */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px',
-                borderTop: '2px solid var(--border)', background: 'var(--bg-sunken)',
-              }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderTop: '2px solid var(--border)', background: 'var(--bg-sunken)' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ink)' }}>{currentBowler.playerName}</div>
                   <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>Current bowler</div>
@@ -283,7 +274,7 @@ export default function ScoringPage() {
                   onClick={() => setModal('bowler')}
                   style={{ fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 500 }}
                 >
-                  Change
+                  Set next bowler
                 </button>
               </div>
             </div>
@@ -296,10 +287,7 @@ export default function ScoringPage() {
                   <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>New over — bowler ready</span>
                 ) : (
                   [...lastSixBalls].reverse().map((ball, i) => (
-                    <div
-                      key={i}
-                      className={`ball-chip ${getBallColorClass(ball.runs, ball.ballType, ball.isWicket)}`}
-                    >
+                    <div key={i} className={`ball-chip ${getBallColorClass(ball.runs, ball.ballType, ball.isWicket)}`}>
                       {getBallDisplay(ball.runs, ball.ballType, ball.isWicket)}
                     </div>
                   ))
@@ -315,7 +303,7 @@ export default function ScoringPage() {
               </div>
 
               <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* Run buttons grid */}
+                {/* Run buttons */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                   {([0, 1, 2, 3, 4, 5, 6] as const).map((r) => (
                     <button
@@ -328,30 +316,18 @@ export default function ScoringPage() {
                         borderColor: r === 4 ? 'oklch(75% 0.09 250)' : r === 6 ? 'var(--accent)' : 'var(--border)',
                         background: r === 4 ? 'oklch(92% 0.06 250)' : r === 6 ? 'var(--accent-soft)' : 'var(--bg-sunken)',
                         color: r === 4 ? 'oklch(35% 0.12 250)' : r === 6 ? 'oklch(35% 0.13 150)' : r === 0 ? 'var(--ink-4)' : 'var(--ink)',
-                        transition: 'all var(--duration) var(--ease)',
-                        fontVariantNumeric: 'tabular-nums',
-                        position: 'relative',
+                        transition: 'all var(--duration) var(--ease)', fontVariantNumeric: 'tabular-nums', position: 'relative',
                       }}
                       className="hover:brightness-95 active:scale-95"
                     >
                       {r === 0 ? '·' : r}
-                      <span style={{
-                        position: 'absolute', bottom: 4, right: 6, fontSize: 9,
-                        color: 'var(--ink-4)', fontFamily: 'var(--font-mono)', fontWeight: 400,
-                      }}>
-                        {r}
-                      </span>
+                      <span style={{ position: 'absolute', bottom: 4, right: 6, fontSize: 9, color: 'var(--ink-4)', fontFamily: 'var(--font-mono)', fontWeight: 400 }}>{r}</span>
                     </button>
                   ))}
                   <button
                     onClick={() => deliverBall(7)}
                     disabled={ballMutation.isPending}
-                    style={{
-                      height: 64, borderRadius: 'var(--radius)', fontSize: 16, fontWeight: 600,
-                      cursor: 'pointer', border: '1.5px solid var(--border)',
-                      background: 'var(--bg-sunken)', color: 'var(--ink-3)',
-                      transition: 'all var(--duration) var(--ease)',
-                    }}
+                    style={{ height: 64, borderRadius: 'var(--radius)', fontSize: 16, fontWeight: 600, cursor: 'pointer', border: '1.5px solid var(--border)', background: 'var(--bg-sunken)', color: 'var(--ink-3)', transition: 'all var(--duration) var(--ease)' }}
                   >
                     7+
                   </button>
@@ -360,10 +336,10 @@ export default function ScoringPage() {
                 {/* Extras row */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                   {[
-                    { label: 'Wide', kbd: 'W', onClick: () => { setExtraKind('wide'); setModal('extras'); } },
-                    { label: 'No ball', kbd: 'N', onClick: () => { setExtraKind('no_ball'); setModal('extras'); } },
-                    { label: 'Bye', kbd: 'B', onClick: () => deliverBall(1, 'bye') },
-                    { label: 'Leg bye', kbd: 'L', onClick: () => deliverBall(1, 'leg_bye') },
+                    { label: 'Wide', kbd: 'W', onClick: () => { setExtraKind('Wide'); setModal('extras'); } },
+                    { label: 'No ball', kbd: 'N', onClick: () => { setExtraKind('NoBall'); setModal('extras'); } },
+                    { label: 'Bye', kbd: 'B', onClick: () => deliverBall(0, 'Bye', 1) },
+                    { label: 'Leg bye', kbd: 'L', onClick: () => deliverBall(0, 'LegBye', 1) },
                   ].map((btn) => (
                     <ActionBtn key={btn.label} label={btn.label} kbd={btn.kbd} onClick={btn.onClick} />
                   ))}
@@ -371,48 +347,24 @@ export default function ScoringPage() {
 
                 {/* Action row */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                  <ActionBtn
-                    label="Wicket"
-                    kbd="X"
-                    onClick={() => setModal('wicket')}
-                    danger
-                    icon={<X size={13} />}
-                  />
-                  <ActionBtn
-                    label="Swap strike"
-                    kbd="S"
-                    onClick={() => {
-                      toast.success('Strike swapped');
-                    }}
-                    icon={<RotateCcw size={12} />}
-                  />
+                  <ActionBtn label="Wicket" kbd="X" onClick={() => setModal('wicket')} danger icon={<X size={13} />} />
+                  <ActionBtn label="Swap strike" kbd="S" onClick={() => toast.success('Strike swapped')} icon={<RotateCcw size={12} />} />
                   <ActionBtn label="Retire" kbd="R" onClick={() => {}} />
-                  <ActionBtn label="New bowler" kbd="⇧B" onClick={() => setModal('bowler')} />
+                  <ActionBtn label="Next bowler" kbd="⇧B" onClick={() => setModal('bowler')} />
                 </div>
 
                 {/* Undo bar */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  paddingTop: 10, borderTop: '1px solid var(--border)',
-                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
                   <Button
-                    variant="ghost"
-                    size="sm"
+                    variant="ghost" size="sm"
                     onClick={() => undoMutation.mutate()}
                     disabled={history.length === 0 || undoMutation.isPending}
                     loading={undoMutation.isPending}
                   >
                     <Undo2 size={13} /> Undo last ball
                   </Button>
-                  <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>
-                    · {history.length} ball{history.length === 1 ? '' : 's'} undoable
-                  </span>
-                  <span style={{
-                    marginLeft: 'auto', fontSize: 12, fontWeight: 500,
-                    padding: '2px 10px', borderRadius: 999,
-                    background: 'var(--bg-sunken)', border: '1px solid var(--border)',
-                    color: 'var(--ink-2)',
-                  }}>
+                  <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>· {history.length} ball{history.length === 1 ? '' : 's'} undoable</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 500, padding: '2px 10px', borderRadius: 999, background: 'var(--bg-sunken)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}>
                     Last: {lastBallLabel}
                   </span>
                 </div>
@@ -422,7 +374,6 @@ export default function ScoringPage() {
 
           {/* ── RIGHT RAIL ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* Match stats */}
             <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
                 <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Match stats</h3>
@@ -435,7 +386,7 @@ export default function ScoringPage() {
               </div>
             </div>
 
-            {/* Commentary / ball log */}
+            {/* Commentary */}
             <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
                 <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>Commentary</h3>
@@ -443,9 +394,7 @@ export default function ScoringPage() {
               </div>
               <div style={{ maxHeight: 400, overflowY: 'auto' }}>
                 {lastSixBalls.length === 0 ? (
-                  <div style={{ padding: '16px 18px', fontSize: 12, color: 'var(--ink-3)' }}>
-                    No balls scored yet — try pressing 4, 6, or W.
-                  </div>
+                  <div style={{ padding: '16px 18px', fontSize: 12, color: 'var(--ink-3)' }}>No balls scored yet.</div>
                 ) : (
                   lastSixBalls.map((ball, i) => {
                     const isWkt = ball.isWicket;
@@ -453,30 +402,10 @@ export default function ScoringPage() {
                     const isSix = ball.runs === 6 && !isWkt;
                     const pill = isWkt ? 'W' : ball.ballType !== 'normal' ? ball.ballType.slice(0, 2).toUpperCase() : ball.runs === 0 ? '·' : String(ball.runs);
                     return (
-                      <div
-                        key={i}
-                        style={{
-                          display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 18px',
-                          borderBottom: i < lastSixBalls.length - 1 ? '1px solid var(--border)' : 'none',
-                          background: isWkt ? 'var(--danger-soft)' : 'transparent',
-                        }}
-                      >
-                        <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'var(--font-mono)', flexShrink: 0, marginTop: 1 }}>
-                          {ball.overNumber}.{ball.ballNumber}
-                        </span>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          minWidth: 24, height: 24, borderRadius: '50%', fontSize: 11, fontWeight: 700, flexShrink: 0,
-                          background: isWkt ? 'var(--danger)' : isSix ? 'var(--accent-soft)' : isFour ? 'oklch(92% 0.06 250)' : 'var(--bg-sunken)',
-                          color: isWkt ? 'white' : isSix ? 'oklch(35% 0.13 150)' : isFour ? 'oklch(35% 0.12 250)' : 'var(--ink-3)',
-                          border: '1px solid',
-                          borderColor: isWkt ? 'var(--danger)' : isSix ? 'var(--accent)' : isFour ? 'oklch(75% 0.09 250)' : 'var(--border)',
-                        }}>
-                          {pill}
-                        </span>
-                        <span style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4 }}>
-                          {ball.commentary || defaultCommentary(ball)}
-                        </span>
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 18px', borderBottom: i < lastSixBalls.length - 1 ? '1px solid var(--border)' : 'none', background: isWkt ? 'var(--danger-soft)' : 'transparent' }}>
+                        <span style={{ fontSize: 11, color: 'var(--ink-4)', fontFamily: 'var(--font-mono)', flexShrink: 0, marginTop: 1 }}>{ball.overNumber}.{ball.ballNumber}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 24, height: 24, borderRadius: '50%', fontSize: 11, fontWeight: 700, flexShrink: 0, background: isWkt ? 'var(--danger)' : isSix ? 'var(--accent-soft)' : isFour ? 'oklch(92% 0.06 250)' : 'var(--bg-sunken)', color: isWkt ? 'white' : isSix ? 'oklch(35% 0.13 150)' : isFour ? 'oklch(35% 0.12 250)' : 'var(--ink-3)', border: '1px solid', borderColor: isWkt ? 'var(--danger)' : isSix ? 'var(--accent)' : isFour ? 'oklch(75% 0.09 250)' : 'var(--border)' }}>{pill}</span>
+                        <span style={{ fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.4 }}>{ball.commentary || defaultCommentary(ball)}</span>
                       </div>
                     );
                   })
@@ -490,21 +419,18 @@ export default function ScoringPage() {
       {/* ── MODALS ── */}
 
       {/* Extras modal */}
-      <Modal open={modal === 'extras'} onClose={() => { setModal(null); setExtraKind(null); }} title={extraKind === 'wide' ? 'Wide' : 'No ball'} size="sm">
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)' }}>
-          How many total runs off the ball?
-        </p>
+      <Modal open={modal === 'extras'} onClose={() => { setModal(null); setExtraKind(null); }} title={extraKind === 'Wide' ? 'Wide' : 'No ball'} size="sm">
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)' }}>How many total runs off the ball?</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {getExtraOptions(extraKind ?? 'wide').map((opt, i) => (
+          {getExtraOptions(extraKind ?? 'Wide').map((opt, i) => (
             <button
               key={i}
-              onClick={() => { deliverBall(opt.r, extraKind ?? 'wide'); setModal(null); setExtraKind(null); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
-                background: 'var(--bg-elevated)', color: 'var(--ink)', cursor: 'pointer', fontSize: 13,
-                transition: 'background var(--duration) var(--ease)', textAlign: 'left',
+              onClick={() => {
+                if (extraKind === 'Wide') deliverBall(0, 'Wide', opt.r);
+                else deliverBall(opt.r - 1, 'NoBall', 1);
+                setModal(null); setExtraKind(null);
               }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--ink)', cursor: 'pointer', fontSize: 13, textAlign: 'left' }}
               className="hover:bg-[var(--bg-hover)]"
             >
               <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--warn-soft)', border: '1px solid var(--warn)', display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, color: 'oklch(38% 0.14 75)', flexShrink: 0 }}>{opt.r}</span>
@@ -517,22 +443,15 @@ export default function ScoringPage() {
         </div>
       </Modal>
 
-      {/* Wicket modal */}
+      {/* Wicket modal — step 1: select dismissal type */}
       <Modal open={modal === 'wicket'} onClose={() => setModal(null)} title="Wicket — how?" size="sm">
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)' }}>
-          Select the mode of dismissal.
-        </p>
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)' }}>Select the mode of dismissal.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {wicketTypes.map((kind, i) => (
             <button
               key={i}
-              onClick={() => { deliverBall(0, 'normal', true, kind.value); setModal(null); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
-                background: 'var(--bg-elevated)', color: 'var(--ink)', cursor: 'pointer', fontSize: 13,
-                transition: 'background var(--duration) var(--ease)', textAlign: 'left',
-              }}
+              onClick={() => { setPendingWicketType(kind.value); setModal('wicket-batsman'); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--ink)', cursor: 'pointer', fontSize: 13, textAlign: 'left' }}
               className="hover:bg-[var(--danger-soft)]"
             >
               <span style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--danger-soft)', border: '1px solid var(--danger)', display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700, color: 'var(--danger)', flexShrink: 0 }}>W</span>
@@ -545,8 +464,45 @@ export default function ScoringPage() {
         </div>
       </Modal>
 
-      {/* Change bowler modal */}
-      <Modal open={modal === 'bowler'} onClose={() => setModal(null)} title="Select new bowler" size="sm">
+      {/* Wicket modal — step 2: select incoming batsman */}
+      <Modal open={modal === 'wicket-batsman'} onClose={() => { setModal(null); setPendingWicketType(null); }} title="Incoming batsman" size="sm">
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)' }}>Who comes in next?</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {availableBatsmen.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--ink-3)' }}>No available batsmen — all out.</p>
+          ) : (
+            availableBatsmen.map((tp) => (
+              <button
+                key={tp.playerId}
+                onClick={() => {
+                  deliverBall(0, 'None', 0, true, pendingWicketType ?? undefined, tp.playerId);
+                  setModal(null); setPendingWicketType(null);
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: 'var(--bg-elevated)', color: 'var(--ink)', cursor: 'pointer', fontSize: 13, textAlign: 'left' }}
+                className="hover:bg-[var(--bg-hover)]"
+              >
+                {tp.player.name}
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--ink-3)', textTransform: 'capitalize' }}>{tp.player.playerRole}</span>
+              </button>
+            ))
+          )}
+          <button
+            onClick={() => { deliverBall(0, 'None', 0, true, pendingWicketType ?? undefined); setModal(null); setPendingWicketType(null); }}
+            style={{ padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px dashed var(--border)', background: 'transparent', color: 'var(--ink-3)', cursor: 'pointer', fontSize: 13, textAlign: 'left' }}
+          >
+            Record wicket without selecting batsman
+          </button>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <Button variant="ghost" size="sm" onClick={() => { setModal(null); setPendingWicketType(null); }}>Cancel</Button>
+        </div>
+      </Modal>
+
+      {/* Set next bowler modal */}
+      <Modal open={modal === 'bowler'} onClose={() => setModal(null)} title="Set next bowler" size="sm">
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--ink-3)' }}>
+          Selected bowler will start the next over.
+        </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {availableBowlers.length === 0 ? (
             <p style={{ fontSize: 13, color: 'var(--ink-3)' }}>No available bowlers.</p>
@@ -554,18 +510,8 @@ export default function ScoringPage() {
             availableBowlers.map((tp) => (
               <button
                 key={tp.playerId}
-                onClick={async () => {
-                  await scoringService.changeBowler(match?.innings[0]?.id ?? '', { bowlerId: tp.playerId });
-                  qc.invalidateQueries({ queryKey: ['live', id] });
-                  setModal(null);
-                  toast.success(`${tp.player.name} is now bowling`);
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                  borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
-                  background: 'var(--bg-elevated)', color: 'var(--ink)', cursor: 'pointer', fontSize: 13,
-                  textAlign: 'left',
-                }}
+                onClick={() => { setPendingNextBowlerId(tp.playerId); setModal(null); toast.success(`${tp.player.name} set for next over`); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid', borderColor: pendingNextBowlerId === tp.playerId ? 'var(--accent)' : 'var(--border)', background: pendingNextBowlerId === tp.playerId ? 'var(--accent-soft)' : 'var(--bg-elevated)', color: 'var(--ink)', cursor: 'pointer', fontSize: 13, textAlign: 'left' }}
                 className="hover:bg-[var(--bg-hover)]"
               >
                 {tp.player.name}
@@ -586,23 +532,11 @@ function ActionBtn({ label, kbd, onClick, danger, icon }: { label: string; kbd: 
   return (
     <button
       onClick={onClick}
-      style={{
-        padding: '10px 8px', borderRadius: 'var(--radius-sm)', fontSize: 12.5, fontWeight: 500,
-        cursor: 'pointer', border: '1.5px solid',
-        borderColor: danger ? 'var(--danger)' : 'var(--border)',
-        background: danger ? 'var(--danger-soft)' : 'var(--bg-sunken)',
-        color: danger ? 'var(--danger)' : 'var(--ink-2)',
-        transition: 'all var(--duration) var(--ease)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-        position: 'relative',
-      }}
+      style={{ padding: '10px 8px', borderRadius: 'var(--radius-sm)', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', border: '1.5px solid', borderColor: danger ? 'var(--danger)' : 'var(--border)', background: danger ? 'var(--danger-soft)' : 'var(--bg-sunken)', color: danger ? 'var(--danger)' : 'var(--ink-2)', transition: 'all var(--duration) var(--ease)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, position: 'relative' }}
       className="hover:brightness-95 active:scale-95"
     >
-      {icon}
-      {label}
-      <span style={{ position: 'absolute', bottom: 2, right: 4, fontSize: 8.5, color: 'var(--ink-4)', fontFamily: 'var(--font-mono)' }}>
-        {kbd}
-      </span>
+      {icon}{label}
+      <span style={{ position: 'absolute', bottom: 2, right: 4, fontSize: 8.5, color: 'var(--ink-4)', fontFamily: 'var(--font-mono)' }}>{kbd}</span>
     </button>
   );
 }
@@ -643,8 +577,8 @@ function getBallColorClass(runs: number, ballType: string, isWicket: boolean): s
   return '';
 }
 
-function getExtraOptions(kind: BallType) {
-  if (kind === 'wide') {
+function getExtraOptions(kind: ExtraType) {
+  if (kind === 'Wide') {
     return [
       { r: 1, l: 'Wide only' }, { r: 2, l: 'Wide + 1' }, { r: 3, l: 'Wide + 2' },
       { r: 5, l: 'Wide + 4 (boundary)' }, { r: 7, l: 'Wide + 6' },
@@ -657,14 +591,16 @@ function getExtraOptions(kind: BallType) {
 }
 
 const wicketTypes: { value: WicketType; label: string }[] = [
-  { value: 'bowled', label: 'Bowled' },
-  { value: 'caught', label: 'Caught' },
-  { value: 'lbw', label: 'LBW' },
-  { value: 'run_out', label: 'Run Out (striker)' },
-  { value: 'run_out', label: 'Run Out (non-striker)' },
-  { value: 'stumped', label: 'Stumped' },
-  { value: 'hit_wicket', label: 'Hit wicket' },
-  { value: 'obstructing_field', label: 'Obstructing the field' },
+  { value: 'Bowled', label: 'Bowled' },
+  { value: 'Caught', label: 'Caught' },
+  { value: 'LBW', label: 'LBW' },
+  { value: 'RunOut', label: 'Run Out (striker)' },
+  { value: 'RunOut', label: 'Run Out (non-striker)' },
+  { value: 'Stumped', label: 'Stumped' },
+  { value: 'HitWicket', label: 'Hit wicket' },
+  { value: 'ObstructingField', label: 'Obstructing the field' },
+  { value: 'TimedOut', label: 'Timed out' },
+  { value: 'DoubleHit', label: 'Double hit' },
 ];
 
 function defaultCommentary(ball: { runs: number; isWicket: boolean; ballType: string; batsmanName: string; bowlerName: string }): string {

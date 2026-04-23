@@ -1,49 +1,40 @@
 import api from './api';
-import type { Match, CreateMatchRequest, TossRequest, StartInningRequest } from '@/types/match.types';
+import { MatchFormatToInt, MatchFormatFromInt, TossDecisionToInt } from '@/utils/api-enums';
+import type { Match, CreateMatchRequest, StartMatchRequest } from '@/types/match.types';
+
+function mapMatch(raw: Record<string, unknown>): Match {
+  return {
+    ...(raw as unknown as Match),
+    format: (MatchFormatFromInt[raw.format as number] ?? raw.format) as Match['format'],
+    status: ((raw.status as string)?.toLowerCase() ?? 'upcoming') as Match['status'],
+    date: ((raw.scheduledAt ?? raw.date) as string) ?? '',
+    totalOvers: ((raw.oversPerInnings ?? raw.totalOvers) as number) ?? 0,
+  };
+}
 
 export const matchService = {
   async getMatches(): Promise<Match[]> {
-    const response = await api.get<Match[]>('/matches');
-    return response.data;
-  },
-
-  async getLiveMatches(): Promise<Match[]> {
-    const response = await api.get<Match[]>('/matches?status=live');
-    return response.data;
-  },
-
-  async getRecentMatches(): Promise<Match[]> {
-    const response = await api.get<Match[]>('/matches?status=completed&limit=5');
-    return response.data;
+    const response = await api.get<Record<string, unknown>[]>('/matches');
+    return response.data.map(mapMatch);
   },
 
   async getMatch(id: string): Promise<Match> {
-    const response = await api.get<Match>(`/matches/${id}`);
-    return response.data;
+    const response = await api.get<Record<string, unknown>>(`/matches/${id}`);
+    return mapMatch(response.data);
   },
 
   async createMatch(data: CreateMatchRequest): Promise<Match> {
-    const response = await api.post<Match>('/matches', data);
-    return response.data;
+    const payload = { ...data, format: MatchFormatToInt[data.format] };
+    const response = await api.post<Record<string, unknown>>('/matches', payload);
+    return mapMatch(response.data);
   },
 
-  async updateMatch(id: string, data: Partial<CreateMatchRequest>): Promise<Match> {
-    const response = await api.put<Match>(`/matches/${id}`, data);
-    return response.data;
-  },
-
-  async setToss(id: string, data: TossRequest): Promise<Match> {
-    const response = await api.post<Match>(`/matches/${id}/toss`, data);
-    return response.data;
-  },
-
-  async startInning(matchId: string, inningId: string, data: StartInningRequest): Promise<Match> {
-    const response = await api.post<Match>(`/matches/${matchId}/innings/${inningId}/start`, data);
-    return response.data;
-  },
-
-  async endMatch(id: string): Promise<Match> {
-    const response = await api.post<Match>(`/matches/${id}/end`);
-    return response.data;
+  async startMatch(id: string, data: StartMatchRequest): Promise<Match> {
+    const payload = {
+      tossWinnerTeamId: data.tossWinnerTeamId,
+      tossDecision: TossDecisionToInt[data.tossDecision],
+    };
+    const response = await api.post<Record<string, unknown>>(`/matches/${id}/start`, payload);
+    return mapMatch(response.data);
   },
 };

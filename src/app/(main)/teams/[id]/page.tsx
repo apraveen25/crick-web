@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, UserX } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Modal } from '@/components/ui/Modal';
@@ -42,17 +42,11 @@ const bowlingStyleOptions: { value: BowlingStyle; label: string }[] = [
 ];
 
 const roleBadgeVariant: Record<PlayerRole, 'blue' | 'green' | 'orange' | 'yellow'> = {
-  Batsman: 'blue',
-  Bowler: 'green',
-  AllRounder: 'orange',
-  WicketKeeper: 'yellow',
+  Batsman: 'blue', Bowler: 'green', AllRounder: 'orange', WicketKeeper: 'yellow',
 };
 
 const roleLabel: Record<PlayerRole, string> = {
-  Batsman: 'Batsman',
-  Bowler: 'Bowler',
-  AllRounder: 'All-Rounder',
-  WicketKeeper: 'Keeper',
+  Batsman: 'Batsman', Bowler: 'Bowler', AllRounder: 'All-Rounder', WicketKeeper: 'Keeper',
 };
 
 const emptyForm: AddPlayerRequest = {
@@ -61,7 +55,9 @@ const emptyForm: AddPlayerRequest = {
   nationality: '',
   battingStyle: 'RightHanded',
   bowlingStyle: 'None',
-  playerRole: 'Batsman',
+  role: 'Batsman',
+  isCaptain: false,
+  isWicketKeeper: false,
   jerseyNumber: undefined,
 };
 
@@ -87,15 +83,6 @@ export default function TeamDetailPage() {
       setForm(emptyForm);
     },
     onError: () => toast.error('Failed to add player'),
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: (playerId: string) => teamService.removePlayer(id, playerId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['team', id] });
-      toast.success('Player removed');
-    },
-    onError: () => toast.error('Failed to remove player'),
   });
 
   const validate = () => {
@@ -161,10 +148,9 @@ export default function TeamDetailPage() {
 
         {/* Player List */}
         <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
-          {/* Header row */}
           <div style={{
             padding: '10px 18px', borderBottom: '1px solid var(--border)',
-            display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 120px 60px',
+            display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 120px',
             gap: 12, fontSize: 11, color: 'var(--ink-3)', fontWeight: 600,
             background: 'var(--bg-sunken)', borderRadius: 'var(--radius) var(--radius) 0 0',
           }}>
@@ -174,7 +160,6 @@ export default function TeamDetailPage() {
             <span>BATTING</span>
             <span>BOWLING</span>
             <span>NATIONALITY</span>
-            <span />
           </div>
 
           {team.players.length === 0 ? (
@@ -189,7 +174,7 @@ export default function TeamDetailPage() {
                 <div
                   key={tp.playerId}
                   style={{
-                    display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 120px 60px',
+                    display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 120px',
                     gap: 12, alignItems: 'center', padding: '12px 18px',
                     borderBottom: i < team.players.length - 1 ? '1px solid var(--border)' : 'none',
                   }}
@@ -203,7 +188,11 @@ export default function TeamDetailPage() {
                     {jerseyNo ?? i + 1}
                   </div>
                   <div>
-                    <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--ink)' }}>{p.name}</div>
+                    <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {p.name}
+                      {tp.isCaptain && <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '1px 5px', borderRadius: 4 }}>C</span>}
+                      {tp.isWicketKeeper && <span style={{ fontSize: 10, fontWeight: 600, color: 'oklch(38% 0.14 75)', background: 'var(--warn-soft)', padding: '1px 5px', borderRadius: 4 }}>WK</span>}
+                    </div>
                     {p.dateOfBirth && (
                       <div style={{ fontSize: 11.5, color: 'var(--ink-4)', marginTop: 1 }}>
                         {new Date(p.dateOfBirth).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -222,13 +211,6 @@ export default function TeamDetailPage() {
                   <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
                     {p.nationality}
                   </span>
-                  <button
-                    onClick={() => { if (confirm(`Remove ${p.name}?`)) removeMutation.mutate(tp.playerId); }}
-                    style={{ padding: 6, borderRadius: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-4)', justifySelf: 'end' }}
-                    className="hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
-                  >
-                    <UserX size={14} />
-                  </button>
                 </div>
               );
             })
@@ -238,7 +220,6 @@ export default function TeamDetailPage() {
 
       <Modal open={showAdd} onClose={() => { setShowAdd(false); setForm(emptyForm); }} title="Add player" size="lg">
         <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Row 1: Name + DOB */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Input
               label="Full name"
@@ -256,7 +237,6 @@ export default function TeamDetailPage() {
             />
           </div>
 
-          {/* Row 2: Nationality + Jersey */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Input
               label="Nationality"
@@ -274,13 +254,12 @@ export default function TeamDetailPage() {
             />
           </div>
 
-          {/* Row 3: Role + Batting style */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Select
               label="Player role"
               options={roleOptions}
-              value={form.playerRole}
-              onChange={(e) => setForm((f) => ({ ...f, playerRole: e.target.value as PlayerRole }))}
+              value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as PlayerRole }))}
             />
             <Select
               label="Batting style"
@@ -290,13 +269,31 @@ export default function TeamDetailPage() {
             />
           </div>
 
-          {/* Row 4: Bowling style (full width) */}
           <Select
             label="Bowling style"
             options={bowlingStyleOptions}
             value={form.bowlingStyle}
             onChange={(e) => setForm((f) => ({ ...f, bowlingStyle: e.target.value as BowlingStyle }))}
           />
+
+          <div style={{ display: 'flex', gap: 16 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={form.isCaptain}
+                onChange={(e) => setForm((f) => ({ ...f, isCaptain: e.target.checked }))}
+              />
+              Captain
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={form.isWicketKeeper}
+                onChange={(e) => setForm((f) => ({ ...f, isWicketKeeper: e.target.checked }))}
+              />
+              Wicket-Keeper
+            </label>
+          </div>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <Button type="button" variant="secondary" onClick={() => { setShowAdd(false); setForm(emptyForm); }}>
@@ -312,16 +309,9 @@ export default function TeamDetailPage() {
 
 function formatBowlingStyle(style: BowlingStyle): string {
   const map: Record<BowlingStyle, string> = {
-    None: '—',
-    RightArmFast: 'RAF',
-    RightArmMediumFast: 'RAMF',
-    RightArmMedium: 'RAM',
-    RightArmOffSpin: 'Off Spin',
-    RightArmLegSpin: 'Leg Spin',
-    LeftArmFast: 'LAF',
-    LeftArmMediumFast: 'LAMF',
-    LeftArmMedium: 'LAM',
-    LeftArmOrthodox: 'Orthodox',
+    None: '—', RightArmFast: 'RAF', RightArmMediumFast: 'RAMF', RightArmMedium: 'RAM',
+    RightArmOffSpin: 'Off Spin', RightArmLegSpin: 'Leg Spin', LeftArmFast: 'LAF',
+    LeftArmMediumFast: 'LAMF', LeftArmMedium: 'LAM', LeftArmOrthodox: 'Orthodox',
     LeftArmUnorthodox: 'Unorthodox',
   };
   return map[style] ?? style;

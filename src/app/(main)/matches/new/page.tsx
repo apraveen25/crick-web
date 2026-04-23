@@ -7,7 +7,6 @@ import { Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { teamService } from '@/services/team.service';
 import { matchService } from '@/services/match.service';
@@ -19,13 +18,12 @@ const defaultOvers: Record<MatchFormat, number> = { T20: 20, ODI: 50, Test: 90, 
 export default function NewMatchPage() {
   const router = useRouter();
   const [form, setForm] = useState<CreateMatchRequest>({
-    name: '',
     format: 'T20',
     venue: '',
-    date: new Date().toISOString().slice(0, 16),
+    scheduledAt: new Date().toISOString().slice(0, 16),
     team1Id: '',
     team2Id: '',
-    totalOvers: 20,
+    oversPerInnings: 20,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -44,7 +42,6 @@ export default function NewMatchPage() {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = 'Match name is required';
     if (!form.team1Id) e.team1Id = 'Select home team';
     if (!form.team2Id) e.team2Id = 'Select away team';
     if (form.team1Id && form.team1Id === form.team2Id) e.team2Id = 'Teams must be different';
@@ -60,7 +57,7 @@ export default function NewMatchPage() {
   };
 
   const setFormat = (f: MatchFormat) => {
-    setForm((prev) => ({ ...prev, format: f, totalOvers: defaultOvers[f] }));
+    setForm((prev) => ({ ...prev, format: f, oversPerInnings: defaultOvers[f] }));
   };
 
   return (
@@ -92,22 +89,34 @@ export default function NewMatchPage() {
               {/* Teams */}
               <SectionCard title="Teams">
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: '16px 18px' }}>
-                  <Select
-                    label="Home team"
-                    options={teamOptions}
-                    placeholder="Select team"
-                    value={form.team1Id}
-                    onChange={(e) => setForm((f) => ({ ...f, team1Id: e.target.value }))}
-                    error={errors.team1Id}
-                  />
-                  <Select
-                    label="Away team"
-                    options={teamOptions}
-                    placeholder="Select team"
-                    value={form.team2Id}
-                    onChange={(e) => setForm((f) => ({ ...f, team2Id: e.target.value }))}
-                    error={errors.team2Id}
-                  />
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)', display: 'block', marginBottom: 6 }}>
+                      Home team
+                    </label>
+                    <select
+                      value={form.team1Id}
+                      onChange={(e) => setForm((f) => ({ ...f, team1Id: e.target.value }))}
+                      style={selectStyle(!!errors.team1Id)}
+                    >
+                      <option value="">Select team</option>
+                      {teamOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    {errors.team1Id && <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{errors.team1Id}</p>}
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)', display: 'block', marginBottom: 6 }}>
+                      Away team
+                    </label>
+                    <select
+                      value={form.team2Id}
+                      onChange={(e) => setForm((f) => ({ ...f, team2Id: e.target.value }))}
+                      style={selectStyle(!!errors.team2Id)}
+                    >
+                      <option value="">Select team</option>
+                      {teamOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    {errors.team2Id && <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4 }}>{errors.team2Id}</p>}
+                  </div>
                 </div>
               </SectionCard>
 
@@ -143,8 +152,8 @@ export default function NewMatchPage() {
                     <Input
                       label="Overs per innings"
                       type="number"
-                      value={form.totalOvers}
-                      onChange={(e) => setForm((f) => ({ ...f, totalOvers: Number(e.target.value) }))}
+                      value={form.oversPerInnings}
+                      onChange={(e) => setForm((f) => ({ ...f, oversPerInnings: Number(e.target.value) }))}
                       min={1}
                     />
                     <Input
@@ -155,21 +164,12 @@ export default function NewMatchPage() {
                       error={errors.venue}
                     />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <Input
-                      label="Match name"
-                      placeholder="VEL vs SRK — T20 Final"
-                      value={form.name}
-                      onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                      error={errors.name}
-                    />
-                    <Input
-                      label="Date & time"
-                      type="datetime-local"
-                      value={form.date}
-                      onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                    />
-                  </div>
+                  <Input
+                    label="Date & time"
+                    type="datetime-local"
+                    value={form.scheduledAt}
+                    onChange={(e) => setForm((f) => ({ ...f, scheduledAt: e.target.value }))}
+                  />
                 </div>
               </SectionCard>
             </div>
@@ -189,9 +189,7 @@ export default function NewMatchPage() {
                   </h4>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', fontSize: 12 }}>
                     <span style={{ color: 'var(--ink-3)' }}>Overs</span>
-                    <span style={{ fontWeight: 500, color: 'var(--ink)' }}>{form.totalOvers}</span>
-                    <span style={{ color: 'var(--ink-3)' }}>Free hit</span>
-                    <span style={{ fontWeight: 500, color: 'var(--ink)' }}>Enabled</span>
+                    <span style={{ fontWeight: 500, color: 'var(--ink)' }}>{form.oversPerInnings}</span>
                     <span style={{ color: 'var(--ink-3)' }}>Format</span>
                     <span style={{ fontWeight: 500, color: 'var(--ink)' }}>{form.format}</span>
                   </div>
@@ -203,6 +201,15 @@ export default function NewMatchPage() {
       </div>
     </>
   );
+}
+
+function selectStyle(hasError: boolean): React.CSSProperties {
+  return {
+    width: '100%', height: 38, padding: '0 10px',
+    borderRadius: 'var(--radius-sm)', fontSize: 13,
+    border: `1px solid ${hasError ? 'var(--danger)' : 'var(--border)'}`,
+    background: 'var(--bg-elevated)', color: 'var(--ink)', outline: 'none',
+  };
 }
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
@@ -223,7 +230,6 @@ function FormatChip({ children }: { children: React.ReactNode }) {
       padding: '3px 8px', borderRadius: 999,
       fontSize: 11, fontWeight: 500,
       background: 'var(--accent-soft)', color: 'oklch(35% 0.13 150)',
-      border: 'none',
     }}>
       {children}
     </span>
