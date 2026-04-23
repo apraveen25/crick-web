@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(mkdir -p \"c:/Users/prave/Desktop/CrickScore/crick-web/src/app/\\(main\\)/players/[id]\")",
+      "Bash(cp \"c:/Users/prave/Desktop/CrickScore/crick-web/app/\\(main\\)/players/[id]/page.tsx\" \"c:/Users/prave/Desktop/CrickScore/crick-web/src/app/\\(main\\)/players/[id]/page.tsx\")",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

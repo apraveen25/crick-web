@@ -34,6 +34,7 @@
   --duration: 160ms;
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
 
+  --font-display: 'Inter Tight', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
@@ -43,12 +44,15 @@
   --bg-elevated: oklch(20% 0.009 260);
   --bg-sunken: oklch(13% 0.008 260);
   --bg-hover: oklch(24% 0.01 260);
+
   --ink: oklch(96% 0.005 90);
   --ink-2: oklch(78% 0.008 260);
   --ink-3: oklch(60% 0.01 260);
   --ink-4: oklch(42% 0.01 260);
+
   --border: oklch(26% 0.01 260);
   --border-strong: oklch(32% 0.012 260);
+
   --accent: oklch(70% 0.14 150);
   --accent-soft: oklch(28% 0.05 150);
   --danger: oklch(68% 0.18 25);
@@ -60,6 +64,8 @@
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--ink);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
 }
 
 * { box-sizing: border-box; }
@@ -80,6 +86,7 @@ body {
 
 ::selection { background: var(--accent-soft); color: var(--ink); }
 
+/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -98,11 +105,13 @@ body {
 .ball-chip.run6 { background: var(--accent-soft); color: oklch(35% 0.13 150); border-color: var(--accent); }
 .ball-chip.run0 { background: var(--bg-sunken); color: var(--ink-4); }
 
+/* Live pulse animation */
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
 
+/* Free hit banner */
 .freehit-banner {
   background: var(--warn-soft);
   color: oklch(38% 0.14 75);

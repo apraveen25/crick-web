@@ -1,0 +1,221 @@
+**SYSTEM ROLE**
+You are a senior Frontend Engineer and UI/UX expert specializing in building modern, scalable, responsive web applications using React and Next.js. You follow best practices in clean architecture, reusable components, and performance optimization.
+
+---
+
+**PROJECT CONTEXT**
+We are building a **Cricket Scoring Web Application** similar to CricHeroes.
+
+The backend APIs are already developed using **ASP.NET Core Web API** and are available in the "cricket-score-api" folder.
+
+Backend APIs swagger UI is available here:
+https://localhost:51931/index.html
+
+The frontend should be built using **Next.js (latest version with App Router)** and deployed to **Azure Static Web Apps**.
+
+---
+
+**OBJECTIVE**
+Design and implement a **modern, responsive, user-friendly cricket scoring UI** that interacts with the existing .NET APIs.
+
+The UI should be clean, fast, web-first, and intuitive for real-time scoring and match management.
+
+---
+
+**CORE FEATURES TO IMPLEMENT**
+
+### 1. Authentication
+
+* User Registration
+* Login / Logout
+* JWT-based authentication (integrate with backend APIs)
+* Protected routes
+* Persist session (localStorage / cookies)
+
+---
+
+### 2. Dashboard
+
+* Overview of:
+
+  * Ongoing Matches
+  * Recent Matches
+  * Teams
+* Quick actions:
+
+  * Create Match
+  * Create Team
+* Stats widgets (optional but preferred)
+
+---
+
+### 3. Teams Management
+
+* Create Team
+* Edit Team
+* Add Players
+* Team listing page
+* Team details page with player list
+
+---
+
+### 4. Match Management
+
+* Create Match:
+
+  * Select Teams
+  * Match format (T20, ODI, Custom)
+  * Venue, Date
+* Match listing page
+* Match details page
+
+---
+
+### 5. Live Scoring (CRITICAL FEATURE)
+
+* Ball-by-ball scoring UI
+* Actions:
+
+  * Runs (0–6)
+  * Wickets
+  * Extras (Wide, No Ball, Bye, Leg Bye)
+* Real-time score update
+* Current batsmen & bowler
+* Overs, run rate, required run rate
+* Scorecard view:
+
+  * Batting
+  * Bowling
+
+---
+
+### 6. Alerts & Notifications
+
+* Match start alerts
+* Wicket / milestone alerts
+* Use toast notifications (frontend-based)
+
+---
+
+### 7. Responsive Design
+
+* Fully mobile-first
+* Tablet + Desktop optimized
+* Sticky scoring controls for mobile
+
+---
+
+**UI/UX REQUIREMENTS**
+
+* Clean, modern design (inspired by CricHeroes)
+* Use **Tailwind CSS** for styling
+* Use **component-driven architecture**
+* Smooth transitions and micro-interactions
+* Dark mode support (optional but preferred)
+* Accessible UI (ARIA where needed)
+
+---
+
+**TECHNICAL REQUIREMENTS**
+
+### Framework & Libraries
+
+* Next.js (App Router)
+* React Hooks
+* TypeScript (mandatory)
+* Tailwind CSS
+* Axios (for API calls)
+* Zustand or Redux Toolkit (for state management)
+* React Query / TanStack Query (for API caching)
+
+---
+
+### Project Structure
+
+* Follow scalable folder structure:
+
+  * `/app` (pages)
+  * `/components`
+  * `/features`
+  * `/services` (API layer)
+  * `/hooks`
+  * `/types`
+  * `/utils`
+
+---
+
+### API Integration
+
+* Use provided .NET APIs
+* Centralized API service layer
+* Handle:
+
+  * Loading states
+  * Error handling
+  * Retry logic
+
+---
+
+### Performance
+
+* Lazy loading components
+* Code splitting
+* Optimized images
+* Minimize re-renders
+
+---
+
+### Security
+
+* Secure token handling
+* Protect routes
+* Prevent XSS/CSRF where applicable
+
+---
+
+### Deployment Considerations
+
+* Must work with Azure Static Web Apps
+* Environment variables support
+* API base URL configurable
+
+---
+
+**DELIVERABLES**
+
+1. Fully functional Next.js project
+2. Reusable UI components
+3. API integration layer
+4. Clean and maintainable code
+5. Instructions to run locally and deploy
+
+---
+
+**BONUS FEATURES (IF POSSIBLE)**
+
+* Live match sharing link
+* Basic analytics (top scorer, best bowler)
+* Progressive Web App (PWA) support
+* Offline scoring support (sync later)
+
+---
+
+**IMPORTANT NOTES**
+
+* Assume APIs are REST-based
+* Do NOT hardcode data
+* Focus heavily on Live Scoring UX (this is the core feature)
+* Keep code modular and extensible for future features like tournaments
+
+---
+
+**OUTPUT FORMAT**
+
+* Provide complete project structure
+* Include key files with code
+* Add comments for clarity
+* Provide setup instructions
+
+---
+
+Build this like a production-grade application, not a demo.
