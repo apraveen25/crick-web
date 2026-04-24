@@ -1,18 +1,10 @@
 import api from './api';
-import {
-  BattingStyleToInt, BattingStyleFromInt,
-  BowlingStyleToInt, BowlingStyleFromInt,
-  PlayerRoleToInt, PlayerRoleFromInt,
-} from '@/utils/api-enums';
 import type { Player, CreatePlayerRequest, UpdatePlayerRequest } from '@/types/team.types';
 
 function mapPlayer(raw: Record<string, unknown>): Player {
-  const roleRaw = raw.playerRole ?? raw.role;
   return {
     ...(raw as unknown as Player),
-    playerRole: (PlayerRoleFromInt[roleRaw as number] ?? roleRaw) as Player['playerRole'],
-    battingStyle: (BattingStyleFromInt[raw.battingStyle as number] ?? raw.battingStyle) as Player['battingStyle'],
-    bowlingStyle: (BowlingStyleFromInt[raw.bowlingStyle as number] ?? raw.bowlingStyle) as Player['bowlingStyle'],
+    playerRole: (raw.playerRole ?? raw.role) as Player['playerRole'],
   };
 }
 
@@ -29,13 +21,7 @@ export const playerService = {
   },
 
   async createPlayer(data: CreatePlayerRequest): Promise<Player> {
-    const payload = {
-      ...data,
-      playerRole: PlayerRoleToInt[data.playerRole],
-      battingStyle: BattingStyleToInt[data.battingStyle],
-      bowlingStyle: BowlingStyleToInt[data.bowlingStyle],
-    };
-    const response = await api.post<Record<string, unknown>>('/players', payload);
+    const response = await api.post<Record<string, unknown>>('/players', data);
     return mapPlayer(response.data);
   },
 
@@ -45,13 +31,7 @@ export const playerService = {
   },
 
   async updatePlayer(id: string, data: UpdatePlayerRequest): Promise<Player> {
-    const payload = {
-      ...data,
-      role: PlayerRoleToInt[data.role],
-      battingStyle: BattingStyleToInt[data.battingStyle],
-      bowlingStyle: BowlingStyleToInt[data.bowlingStyle],
-    };
-    const response = await api.put<Record<string, unknown>>(`/players/${id}`, payload);
+    const response = await api.put<Record<string, unknown>>(`/players/${id}`, data);
     return mapPlayer(response.data);
   },
 };

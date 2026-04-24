@@ -21,6 +21,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       localStorage.removeItem('crick_token');
       localStorage.removeItem('crick_user');
+      document.cookie = 'crick_token=; path=/; max-age=0; SameSite=Lax';
       window.location.href = '/login';
     }
     return Promise.reject(error);

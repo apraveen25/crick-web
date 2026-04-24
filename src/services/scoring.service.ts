@@ -1,9 +1,8 @@
 import api from './api';
-import { ExtraTypeToInt, WicketTypeToInt } from '@/utils/api-enums';
 import type { LiveScore, DeliverBallRequest, BallRecord } from '@/types/scoring.types';
 
-const extraToBallType: Record<number, string> = {
-  0: 'normal', 1: 'wide', 2: 'no_ball', 3: 'bye', 4: 'leg_bye',
+const extraToBallType: Record<string, string> = {
+  None: 'normal', Wide: 'wide', NoBall: 'no_ball', Bye: 'bye', LegBye: 'leg_bye',
 };
 
 export const scoringService = {
@@ -15,14 +14,13 @@ export const scoringService = {
   async deliverBall(matchId: string, data: DeliverBallRequest): Promise<BallRecord> {
     const payload = {
       ...data,
-      extraType: ExtraTypeToInt[data.extraType] ?? 0,
-      wicketType: data.wicketType !== undefined ? WicketTypeToInt[data.wicketType] : 0,
+      wicketType: data.wicketType ?? 'None',
     };
     const response = await api.post<Record<string, unknown>>(`/live/${matchId}/ball`, payload);
     const raw = response.data;
     return {
       ...(raw as unknown as BallRecord),
-      ballType: extraToBallType[raw.extraType as number] ?? 'normal',
+      ballType: extraToBallType[raw.extraType as string] ?? 'normal',
       runs: ((raw.runsScored as number) ?? 0) + ((raw.extraRuns as number) ?? 0),
     };
   },

@@ -3,17 +3,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, Plus, Search, X, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { PageSpinner } from '@/components/ui/Spinner';
 import { teamService } from '@/services/team.service';
 import { playerService } from '@/services/player.service';
-import type { Player, PlayerRole } from '@/types/team.types';
+import type { Player, PlayerRole, TeamPlayer, UpdateTeamPlayerRequest } from '@/types/team.types';
 
 const roleBadgeVariant: Record<PlayerRole, 'blue' | 'green' | 'orange' | 'yellow'> = {
   Batsman: 'blue', Bowler: 'green', AllRounder: 'orange', WicketKeeper: 'yellow',
@@ -23,27 +24,38 @@ const roleLabel: Record<PlayerRole, string> = {
   Batsman: 'Batsman', Bowler: 'Bowler', AllRounder: 'All-Rounder', WicketKeeper: 'Keeper',
 };
 
+const roleOptions = [
+  { value: 'Batsman', label: 'Batsman' },
+  { value: 'Bowler', label: 'Bowler' },
+  { value: 'AllRounder', label: 'All-Rounder' },
+  { value: 'WicketKeeper', label: 'Wicket-Keeper' },
+];
+
+
+const emptyEditForm = (): UpdateTeamPlayerRequest => ({
+  name: '', role: 'Batsman', isCaptain: false, isWicketKeeper: false,
+});
+
 export default function TeamDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
 
-  // Modal open state
+  // Add player modal state
   const [showAdd, setShowAdd] = useState(false);
-
-  // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Player[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-
-  // Team-specific options
   const [isCaptain, setIsCaptain] = useState(false);
   const [isWicketKeeper, setIsWicketKeeper] = useState(false);
-  const [jerseyNumber, setJerseyNumber] = useState<number | undefined>();
-
+  const [addError, setAddError] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Edit player modal state
+  const [editingTp, setEditingTp] = useState<TeamPlayer | null>(null);
+  const [editForm, setEditForm] = useState<UpdateTeamPlayerRequest>(emptyEditForm());
 
   const { data: team, isLoading } = useQuery({
     queryKey: ['team', id],
@@ -86,19 +98,48 @@ export default function TeamDetailPage() {
   const addMutation = useMutation({
     mutationFn: () => teamService.addExistingPlayer(id, {
       playerId: selectedPlayer!.id,
+      name: selectedPlayer!.name,
+      role: selectedPlayer!.playerRole,
       isCaptain,
       isWicketKeeper,
-      jerseyNumber,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['team', id] });
       toast.success('Player added to team');
-      handleClose();
+      handleAddClose();
     },
-    onError: () => toast.error('Failed to add player'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setAddError(msg ?? 'Failed to add player');
+    },
   });
 
-  const handleClose = () => {
+  const editMutation = useMutation({
+    mutationFn: () => teamService.updateTeamPlayer(id, editingTp!.playerId, editForm),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['team', id] });
+      toast.success('Player updated');
+      setEditingTp(null);
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg ?? 'Failed to update player');
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (playerId: string) => teamService.removePlayer(id, playerId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['team', id] });
+      toast.success('Player removed from team');
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg ?? 'Failed to remove player');
+    },
+  });
+
+  const handleAddClose = () => {
     setShowAdd(false);
     setSearchQuery('');
     setSearchResults([]);
@@ -106,13 +147,24 @@ export default function TeamDetailPage() {
     setShowDropdown(false);
     setIsCaptain(false);
     setIsWicketKeeper(false);
-    setJerseyNumber(undefined);
+    setAddError(null);
   };
 
   const selectPlayer = (player: Player) => {
     setSelectedPlayer(player);
     setSearchQuery(player.name);
     setShowDropdown(false);
+    setAddError(null);
+  };
+
+  const openEdit = (tp: TeamPlayer) => {
+    setEditForm({
+      name: tp.player.name ?? '',
+      role: tp.player.playerRole ?? 'Batsman',
+      isCaptain: tp.isCaptain ?? false,
+      isWicketKeeper: tp.isWicketKeeper ?? false,
+    });
+    setEditingTp(tp);
   };
 
   if (isLoading) return <PageSpinner />;
@@ -129,7 +181,7 @@ export default function TeamDetailPage() {
         }
       />
 
-      <div style={{ padding: '28px 32px 48px', maxWidth: 900 }}>
+      <div style={{ padding: '28px 32px 48px', maxWidth: 960 }}>
         <button
           onClick={() => router.back()}
           style={{
@@ -165,7 +217,7 @@ export default function TeamDetailPage() {
         <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{
             padding: '10px 18px', borderBottom: '1px solid var(--border)',
-            display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 120px',
+            display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 100px 64px',
             gap: 12, fontSize: 11, color: 'var(--ink-3)', fontWeight: 600,
             background: 'var(--bg-sunken)', borderRadius: 'var(--radius) var(--radius) 0 0',
           }}>
@@ -175,6 +227,7 @@ export default function TeamDetailPage() {
             <span>BATTING</span>
             <span>BOWLING</span>
             <span>NATIONALITY</span>
+            <span></span>
           </div>
 
           {team.players.length === 0 ? (
@@ -182,16 +235,16 @@ export default function TeamDetailPage() {
               No players yet. Add your first player.
             </div>
           ) : (
-            team.players.map((tp, i) => {
+            team.players.filter((tp) => tp.player).map((tp, i, arr) => {
               const p = tp.player;
               const jerseyNo = tp.jerseyNumber ?? p.jerseyNumber;
               return (
                 <div
                   key={tp.playerId}
                   style={{
-                    display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 120px',
+                    display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 100px 64px',
                     gap: 12, alignItems: 'center', padding: '12px 18px',
-                    borderBottom: i < team.players.length - 1 ? '1px solid var(--border)' : 'none',
+                    borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
                   }}
                 >
                   <div style={{
@@ -218,14 +271,36 @@ export default function TeamDetailPage() {
                     {roleLabel[p.playerRole]}
                   </Badge>
                   <span style={{ fontSize: 12, color: 'var(--ink-2)' }}>
-                    {p.battingStyle === 'RightHanded' ? 'Right' : 'Left'}
+                    {p.battingStyle === 'RightHanded' ? 'Right' : p.battingStyle === 'LeftHanded' ? 'Left' : '—'}
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
                     {formatBowlingStyle(p.bowlingStyle)}
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                    {p.nationality}
+                    {p.nationality ?? '—'}
                   </span>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      onClick={() => openEdit(tp)}
+                      title="Edit player"
+                      style={{ padding: 6, borderRadius: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}
+                      className="hover:bg-[var(--bg-hover)] hover:text-[var(--ink)]"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Remove ${p.name} from ${team.name}?`)) {
+                          removeMutation.mutate(tp.playerId);
+                        }
+                      }}
+                      title="Remove from team"
+                      style={{ padding: 6, borderRadius: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}
+                      className="hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               );
             })
@@ -234,10 +309,9 @@ export default function TeamDetailPage() {
       </div>
 
       {/* Add Player Modal */}
-      <Modal open={showAdd} onClose={handleClose} title="Add player to team" size="md">
+      <Modal open={showAdd} onClose={handleAddClose} title="Add player to team" size="md">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Autocomplete search */}
           <div>
             <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)', display: 'block', marginBottom: 6 }}>
               Search player
@@ -272,7 +346,6 @@ export default function TeamDetailPage() {
                 )}
               </div>
 
-              {/* Dropdown results */}
               {showDropdown && !selectedPlayer && (
                 <div style={{
                   position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 50,
@@ -327,7 +400,6 @@ export default function TeamDetailPage() {
             )}
           </div>
 
-          {/* Selected player card */}
           {selectedPlayer && (
             <div style={{
               padding: '12px 14px', borderRadius: 'var(--radius-sm)',
@@ -358,16 +430,8 @@ export default function TeamDetailPage() {
             </div>
           )}
 
-          {/* Team-specific options — only shown after a player is selected */}
           {selectedPlayer && (
             <>
-              <Input
-                label="Jersey number (optional)"
-                type="number"
-                placeholder="10"
-                value={jerseyNumber ?? ''}
-                onChange={(e) => setJerseyNumber(e.target.value ? Number(e.target.value) : undefined)}
-              />
               <div style={{ display: 'flex', gap: 20 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={isCaptain} onChange={(e) => setIsCaptain(e.target.checked)} />
@@ -381,14 +445,57 @@ export default function TeamDetailPage() {
             </>
           )}
 
+          {addError && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 'var(--radius-sm)',
+              background: 'var(--danger-soft)', border: '1px solid var(--danger)',
+              fontSize: 13, color: 'var(--danger)',
+            }}>
+              {addError}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
-            <Button type="button" variant="secondary" onClick={handleClose}>Cancel</Button>
+            <Button type="button" variant="secondary" onClick={handleAddClose}>Cancel</Button>
             <Button
               onClick={() => addMutation.mutate()}
               loading={addMutation.isPending}
               disabled={!selectedPlayer}
             >
               Add to team
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Player Modal */}
+      <Modal open={!!editingTp} onClose={() => setEditingTp(null)} title="Edit player" size="md">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Input
+            label="Name"
+            value={editForm.name ?? ''}
+            onChange={(e) => setEditForm((f: UpdateTeamPlayerRequest) => ({ ...f, name: e.target.value }))}
+          />
+          <Select
+            label="Role"
+            options={roleOptions}
+            value={editForm.role}
+            onChange={(e) => setEditForm((f: UpdateTeamPlayerRequest) => ({ ...f, role: e.target.value as PlayerRole }))}
+          />
+          <div style={{ display: 'flex', gap: 20 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={editForm.isCaptain ?? false} onChange={(e) => setEditForm((f: UpdateTeamPlayerRequest) => ({ ...f, isCaptain: e.target.checked }))} />
+              Captain
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={editForm.isWicketKeeper ?? false} onChange={(e) => setEditForm((f: UpdateTeamPlayerRequest) => ({ ...f, isWicketKeeper: e.target.checked }))} />
+              Wicket-Keeper
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+            <Button type="button" variant="secondary" onClick={() => setEditingTp(null)}>Cancel</Button>
+            <Button onClick={() => editMutation.mutate()} loading={editMutation.isPending}>
+              Save changes
             </Button>
           </div>
         </div>
@@ -404,5 +511,5 @@ function formatBowlingStyle(style: string): string {
     LeftArmMediumFast: 'LAMF', LeftArmMedium: 'LAM', LeftArmOrthodox: 'Orthodox',
     LeftArmUnorthodox: 'Unorthodox',
   };
-  return map[style] ?? style;
+  return map[style] ?? style ?? '—';
 }

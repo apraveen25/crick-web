@@ -87,7 +87,16 @@ export interface AddPlayerRequest {
 // POST /teams/{id}/players — add existing player by ID
 export interface AddExistingPlayerRequest {
   playerId: string;
+  name: string;
+  role: PlayerRole;
   isCaptain?: boolean;
   isWicketKeeper?: boolean;
-  jerseyNumber?: number;
+}
+
+// PUT /teams/{id}/players/{playerId} — update team player
+export interface UpdateTeamPlayerRequest {
+  name?: string;
+  role: PlayerRole;
+  isCaptain?: boolean;
+  isWicketKeeper?: boolean;
 }

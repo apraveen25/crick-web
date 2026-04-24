@@ -4,7 +4,9 @@
       "Bash(npm run *)",
       "Bash(mkdir -p \"c:/Users/prave/Desktop/CrickScore/crick-web/src/app/\\(main\\)/players/[id]\")",
       "Bash(cp \"c:/Users/prave/Desktop/CrickScore/crick-web/app/\\(main\\)/players/[id]/page.tsx\" \"c:/Users/prave/Desktop/CrickScore/crick-web/src/app/\\(main\\)/players/[id]/page.tsx\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \" import json,sys data=json.load\\(sys.stdin\\) paths=data.get\\('paths',{}\\) components=data.get\\('components',{}\\).get\\('schemas',{}\\) for name,schema in components.items\\(\\): props=schema.get\\('properties',{}\\) if props: print\\(f'Schema: {name}'\\) for p,v in props.items\\(\\): print\\(f' {p}: {v}'\\) print\\(\\) \")"
     ]
   }
 }

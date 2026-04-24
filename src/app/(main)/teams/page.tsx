@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { Plus, Users, ChevronRight, Trash2 } from 'lucide-react';
+import { Plus, Users, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Modal } from '@/components/ui/Modal';
@@ -20,7 +20,7 @@ export default function TeamsPage() {
   const [form, setForm] = useState<CreateTeamRequest>({ name: '', shortName: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { data: teams = [], isLoading } = useQuery({
+  const { data: teams = [], isLoading, isError, error } = useQuery({
     queryKey: ['teams'],
     queryFn: teamService.getTeams,
   });
@@ -34,15 +34,6 @@ export default function TeamsPage() {
       setForm({ name: '', shortName: '' });
     },
     onError: () => toast.error('Failed to create team'),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: teamService.deleteTeam,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['teams'] });
-      toast.success('Team deleted');
-    },
-    onError: () => toast.error('Failed to delete team'),
   });
 
   const validate = () => {
@@ -82,6 +73,10 @@ export default function TeamsPage() {
             {[1, 2, 3].map((i) => (
               <div key={i} style={{ height: 80, borderRadius: 'var(--radius)', background: 'var(--bg-sunken)', animation: 'pulse 1.5s ease-in-out infinite' }} />
             ))}
+          </div>
+        ) : isError ? (
+          <div style={{ color: 'var(--danger)', padding: '16px', background: 'var(--danger-soft)', borderRadius: 'var(--radius)', fontSize: 14 }}>
+            Failed to load teams: {(error as Error)?.message ?? 'Unknown error'}
           </div>
         ) : teams.length === 0 ? (
           <EmptyState
@@ -123,16 +118,7 @@ export default function TeamsPage() {
                     {team.players.length} player{team.players.length !== 1 ? 's' : ''}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); if (confirm('Delete this team?')) deleteMutation.mutate(team.id); }}
-                    style={{ padding: 6, borderRadius: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}
-                    className="hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                  <ChevronRight size={16} style={{ color: 'var(--ink-4)' }} />
-                </div>
+                <ChevronRight size={16} style={{ color: 'var(--ink-4)' }} />
               </div>
             ))}
           </div>

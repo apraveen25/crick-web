@@ -1,33 +1,41 @@
 import api from './api';
-import {
-  BattingStyleToInt, BattingStyleFromInt,
-  BowlingStyleToInt, BowlingStyleFromInt,
-  PlayerRoleToInt, PlayerRoleFromInt,
-} from '@/utils/api-enums';
-import type { Team, CreateTeamRequest, AddPlayerRequest, AddExistingPlayerRequest, TeamPlayer } from '@/types/team.types';
+import type { Team, CreateTeamRequest, AddPlayerRequest, AddExistingPlayerRequest, UpdateTeamPlayerRequest, TeamPlayer } from '@/types/team.types';
 
 function mapPlayer(raw: Record<string, unknown>) {
-  const roleRaw = raw.playerRole ?? raw.role;
   return {
     ...(raw as Record<string, unknown>),
-    playerRole: PlayerRoleFromInt[roleRaw as number] ?? roleRaw,
-    battingStyle: BattingStyleFromInt[raw.battingStyle as number] ?? raw.battingStyle,
-    bowlingStyle: BowlingStyleFromInt[raw.bowlingStyle as number] ?? raw.bowlingStyle,
+    playerRole: raw.playerRole ?? raw.role,
   };
 }
 
 function mapTeam(raw: Record<string, unknown>): Team {
-  const players = ((raw.players ?? []) as Record<string, unknown>[]).map((tp) => ({
-    ...tp,
-    player: mapPlayer(tp.player as Record<string, unknown>),
-  }));
+  const players = ((raw.players ?? []) as Record<string, unknown>[]).map((tp) => {
+    // API returns a flat shape: { playerId, name, role, isCaptain, isWicketKeeper, ... }
+    // with no nested `player` sub-object. Build one from the flat fields.
+    const player = tp.player
+      ? mapPlayer(tp.player as Record<string, unknown>)
+      : mapPlayer({
+          id: tp.playerId,
+          name: tp.name,
+          playerRole: tp.playerRole,
+          role: tp.role,
+          battingStyle: tp.battingStyle,
+          bowlingStyle: tp.bowlingStyle,
+          dateOfBirth: tp.dateOfBirth,
+          nationality: tp.nationality,
+          jerseyNumber: tp.jerseyNumber,
+        });
+    return { teamId: tp.teamId, playerId: tp.playerId, isCaptain: tp.isCaptain, isWicketKeeper: tp.isWicketKeeper, jerseyNumber: tp.jerseyNumber, player };
+  });
   return { ...(raw as unknown as Team), players: players as TeamPlayer[] };
 }
 
 export const teamService = {
   async getTeams(): Promise<Team[]> {
-    const response = await api.get<Record<string, unknown>[]>('/teams/my');
-    return response.data.map(mapTeam);
+    const response = await api.get<unknown>('/teams/my');
+    const raw = response.data;
+    const list = Array.isArray(raw) ? raw : ((raw as Record<string, unknown>)?.items ?? (raw as Record<string, unknown>)?.teams ?? (raw as Record<string, unknown>)?.data ?? []);
+    return (list as Record<string, unknown>[]).map(mapTeam);
   },
 
   async getTeam(id: string): Promise<Team> {
@@ -41,20 +49,21 @@ export const teamService = {
   },
 
   async addPlayer(teamId: string, data: AddPlayerRequest): Promise<TeamPlayer> {
-    const payload = {
-      ...data,
-      role: PlayerRoleToInt[data.role],
-      battingStyle: BattingStyleToInt[data.battingStyle],
-      bowlingStyle: BowlingStyleToInt[data.bowlingStyle],
-    };
-    const response = await api.post<Record<string, unknown>>(`/teams/${teamId}/players`, payload);
-    const tp = response.data as Record<string, unknown>;
-    return { ...tp, player: mapPlayer(tp.player as Record<string, unknown>) } as TeamPlayer;
+    const response = await api.post<Record<string, unknown>>(`/teams/${teamId}/players`, data);
+    return mapTeam({ players: [response.data] }).players[0];
   },
 
   async addExistingPlayer(teamId: string, data: AddExistingPlayerRequest): Promise<TeamPlayer> {
     const response = await api.post<Record<string, unknown>>(`/teams/${teamId}/players`, data);
-    const tp = response.data as Record<string, unknown>;
-    return { ...tp, player: mapPlayer(tp.player as Record<string, unknown>) } as TeamPlayer;
+    return mapTeam({ players: [response.data] }).players[0];
+  },
+
+  async updateTeamPlayer(teamId: string, playerId: string, data: UpdateTeamPlayerRequest): Promise<TeamPlayer> {
+    const response = await api.put<Record<string, unknown>>(`/teams/${teamId}/players/${playerId}`, data);
+    return mapTeam({ players: [response.data] }).players[0];
+  },
+
+  async removePlayer(teamId: string, playerId: string): Promise<void> {
+    await api.delete(`/teams/${teamId}/players/${playerId}`);
   },
 };
