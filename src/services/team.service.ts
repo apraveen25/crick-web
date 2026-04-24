@@ -1,5 +1,5 @@
 import api from './api';
-import type { Team, CreateTeamRequest, AddPlayerRequest, AddExistingPlayerRequest, UpdateTeamPlayerRequest, TeamPlayer } from '@/types/team.types';
+import type { Team, CreateTeamRequest, AddPlayerRequest, AddExistingPlayerRequest, UpdateTeamPlayerRequest, RearrangePlayersRequest, TeamPlayer } from '@/types/team.types';
 
 function mapPlayer(raw: Record<string, unknown>) {
   return {
@@ -61,6 +61,10 @@ export const teamService = {
   async updateTeamPlayer(teamId: string, playerId: string, data: UpdateTeamPlayerRequest): Promise<TeamPlayer> {
     const response = await api.put<Record<string, unknown>>(`/teams/${teamId}/players/${playerId}`, data);
     return mapTeam({ players: [response.data] }).players[0];
+  },
+
+  async rearrangePlayers(teamId: string, data: RearrangePlayersRequest): Promise<void> {
+    await api.put(`/teams/${teamId}/players/rearrange`, data);
   },
 
   async removePlayer(teamId: string, playerId: string): Promise<void> {

@@ -100,3 +100,8 @@ export interface UpdateTeamPlayerRequest {
   isCaptain?: boolean;
   isWicketKeeper?: boolean;
 }
+
+// PUT /teams/{id}/players/rearrange — persist batting order
+export interface RearrangePlayersRequest {
+  playerIds: string[];
+}

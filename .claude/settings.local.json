@@ -6,7 +6,8 @@
       "Bash(cp \"c:/Users/prave/Desktop/CrickScore/crick-web/app/\\(main\\)/players/[id]/page.tsx\" \"c:/Users/prave/Desktop/CrickScore/crick-web/src/app/\\(main\\)/players/[id]/page.tsx\")",
       "Bash(npx tsc *)",
       "Bash(python3 -c ' *)",
-      "Bash(python3 -c \" import json,sys data=json.load\\(sys.stdin\\) paths=data.get\\('paths',{}\\) components=data.get\\('components',{}\\).get\\('schemas',{}\\) for name,schema in components.items\\(\\): props=schema.get\\('properties',{}\\) if props: print\\(f'Schema: {name}'\\) for p,v in props.items\\(\\): print\\(f' {p}: {v}'\\) print\\(\\) \")"
+      "Bash(python3 -c \" import json,sys data=json.load\\(sys.stdin\\) paths=data.get\\('paths',{}\\) components=data.get\\('components',{}\\).get\\('schemas',{}\\) for name,schema in components.items\\(\\): props=schema.get\\('properties',{}\\) if props: print\\(f'Schema: {name}'\\) for p,v in props.items\\(\\): print\\(f' {p}: {v}'\\) print\\(\\) \")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); deps={**d.get\\('dependencies',{}\\),**d.get\\('devDependencies',{}\\)}; [print\\(k,v\\) for k,v in deps.items\\(\\) if 'dnd' in k.lower\\(\\) or 'drag' in k.lower\\(\\) or 'sortable' in k.lower\\(\\)]\")"
     ]
   }
 }

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Search, X, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Search, X, Pencil, Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Modal } from '@/components/ui/Modal';
@@ -57,10 +57,68 @@ export default function TeamDetailPage() {
   const [editingTp, setEditingTp] = useState<TeamPlayer | null>(null);
   const [editForm, setEditForm] = useState<UpdateTeamPlayerRequest>(emptyEditForm());
 
+  // Drag-and-drop / ordering state
+  const [orderedIds, setOrderedIds] = useState<string[]>([]);
+  const [dragOverIdx, setDragOverIdx] = useState(-1);
+  const dragSrcIdx = useRef(-1);
+
   const { data: team, isLoading } = useQuery({
     queryKey: ['team', id],
     queryFn: () => teamService.getTeam(id),
   });
+
+  // Sync ordered IDs when team data refreshes; preserve existing order, append new arrivals
+  useEffect(() => {
+    if (!team) return;
+    const valid = team.players.filter((tp) => tp.player).map((tp) => tp.playerId);
+    setOrderedIds((prev) => {
+      const kept = prev.filter((id) => valid.includes(id));
+      const added = valid.filter((id) => !prev.includes(id));
+      return [...kept, ...added];
+    });
+  }, [team]);
+
+  const orderedPlayers = useMemo(
+    () => orderedIds
+      .map((pid) => team?.players.find((tp) => tp.playerId === pid))
+      .filter((tp): tp is TeamPlayer => !!tp?.player),
+    [orderedIds, team],
+  );
+
+  const persistOrder = (ids: string[]) => {
+    teamService.rearrangePlayers(id, { playerIds: ids }).catch(() => {
+      toast.error('Failed to save order');
+    });
+  };
+
+  const movePlayer = (idx: number, dir: 'up' | 'down') => {
+    setOrderedIds((prev) => {
+      const next = [...prev];
+      const to = dir === 'up' ? idx - 1 : idx + 1;
+      if (to < 0 || to >= next.length) return prev;
+      [next[idx], next[to]] = [next[to], next[idx]];
+      persistOrder(next);
+      return next;
+    });
+  };
+
+  const handleDragStart = (idx: number) => { dragSrcIdx.current = idx; };
+  const handleDragOver = (e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOverIdx(idx); };
+  const handleDragLeave = () => setDragOverIdx(-1);
+  const handleDrop = (idx: number) => {
+    const from = dragSrcIdx.current;
+    setDragOverIdx(-1);
+    if (from < 0 || from === idx) return;
+    setOrderedIds((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(idx, 0, item);
+      persistOrder(next);
+      return next;
+    });
+    dragSrcIdx.current = -1;
+  };
+  const handleDragEnd = () => { dragSrcIdx.current = -1; setDragOverIdx(-1); };
 
   // Debounced search
   useEffect(() => {
@@ -217,10 +275,11 @@ export default function TeamDetailPage() {
         <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{
             padding: '10px 18px', borderBottom: '1px solid var(--border)',
-            display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 100px 64px',
+            display: 'grid', gridTemplateColumns: '20px 36px 1fr 90px 90px 120px 100px 112px',
             gap: 12, fontSize: 11, color: 'var(--ink-3)', fontWeight: 600,
             background: 'var(--bg-sunken)', borderRadius: 'var(--radius) var(--radius) 0 0',
           }}>
+            <span></span>
             <span>#</span>
             <span>PLAYER</span>
             <span>ROLE</span>
@@ -235,18 +294,29 @@ export default function TeamDetailPage() {
               No players yet. Add your first player.
             </div>
           ) : (
-            team.players.filter((tp) => tp.player).map((tp, i, arr) => {
+            orderedPlayers.map((tp, i, arr) => {
               const p = tp.player;
               const jerseyNo = tp.jerseyNumber ?? p.jerseyNumber;
+              const isDragTarget = dragOverIdx === i;
               return (
                 <div
                   key={tp.playerId}
+                  draggable
+                  onDragStart={() => handleDragStart(i)}
+                  onDragOver={(e) => handleDragOver(e, i)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={() => handleDrop(i)}
+                  onDragEnd={handleDragEnd}
                   style={{
-                    display: 'grid', gridTemplateColumns: '36px 1fr 90px 90px 120px 100px 64px',
+                    display: 'grid', gridTemplateColumns: '20px 36px 1fr 90px 90px 120px 100px 112px',
                     gap: 12, alignItems: 'center', padding: '12px 18px',
                     borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                    background: isDragTarget ? 'var(--accent-soft)' : undefined,
+                    borderTop: isDragTarget ? '2px solid var(--accent)' : undefined,
+                    transition: 'background 120ms ease',
                   }}
                 >
+                  <GripVertical size={14} style={{ color: 'var(--ink-4)', cursor: 'grab' }} />
                   <div style={{
                     width: 32, height: 32, borderRadius: '50%',
                     background: 'var(--bg-sunken)', border: '1px solid var(--border)',
@@ -279,23 +349,37 @@ export default function TeamDetailPage() {
                   <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
                     {p.nationality ?? '—'}
                   </span>
-                  <div style={{ display: 'flex', gap: 4 }}>
+                  <div style={{ display: 'flex', gap: 2 }}>
+                    <button
+                      onClick={() => movePlayer(i, 'up')}
+                      disabled={i === 0}
+                      title="Move up"
+                      style={{ padding: 5, borderRadius: 5, border: 'none', background: 'none', cursor: i === 0 ? 'default' : 'pointer', color: i === 0 ? 'var(--ink-5)' : 'var(--ink-4)' }}
+                      className={i === 0 ? '' : 'hover:bg-[var(--bg-hover)] hover:text-[var(--ink)]'}
+                    >
+                      <ChevronUp size={13} />
+                    </button>
+                    <button
+                      onClick={() => movePlayer(i, 'down')}
+                      disabled={i === arr.length - 1}
+                      title="Move down"
+                      style={{ padding: 5, borderRadius: 5, border: 'none', background: 'none', cursor: i === arr.length - 1 ? 'default' : 'pointer', color: i === arr.length - 1 ? 'var(--ink-5)' : 'var(--ink-4)' }}
+                      className={i === arr.length - 1 ? '' : 'hover:bg-[var(--bg-hover)] hover:text-[var(--ink)]'}
+                    >
+                      <ChevronDown size={13} />
+                    </button>
                     <button
                       onClick={() => openEdit(tp)}
-                      title="Edit player"
-                      style={{ padding: 6, borderRadius: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}
+                      title="Edit"
+                      style={{ padding: 5, borderRadius: 5, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}
                       className="hover:bg-[var(--bg-hover)] hover:text-[var(--ink)]"
                     >
                       <Pencil size={13} />
                     </button>
                     <button
-                      onClick={() => {
-                        if (confirm(`Remove ${p.name} from ${team.name}?`)) {
-                          removeMutation.mutate(tp.playerId);
-                        }
-                      }}
-                      title="Remove from team"
-                      style={{ padding: 6, borderRadius: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}
+                      onClick={() => { if (confirm(`Remove ${p.name} from ${team.name}?`)) removeMutation.mutate(tp.playerId); }}
+                      title="Remove"
+                      style={{ padding: 5, borderRadius: 5, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-4)' }}
                       className="hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
                     >
                       <Trash2 size={13} />
